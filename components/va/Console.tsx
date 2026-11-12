@@ -27,7 +27,7 @@ export interface VaNav {
 const NAV: { key: VaView; label: string; icon: React.ReactNode; also?: VaView[] }[] = [
   { key: "queue", label: "Queue", icon: <Inbox className="h-4 w-4" />, also: ["event"] },
   { key: "projects", label: "Projects", icon: <FolderKanban className="h-4 w-4" />, also: ["project", "preview"] },
-  { key: "tasks", label: "Tasks", icon: <ClipboardList className="h-4 w-4" /> },
+  { key: "tasks", label: "Tickets", icon: <ClipboardList className="h-4 w-4" /> },
   { key: "sources", label: "Data sources", icon: <DatabaseZap className="h-4 w-4" /> },
   { key: "qc", label: "QC review", icon: <BarChart3 className="h-4 w-4" /> },
 ];

@@ -123,7 +123,7 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
         {!preview ? (
           <div className="flex gap-2">
             <Button size="sm" onClick={() => setNewTask(true)}>
-              New task
+              Submit a request
             </Button>
             <Button data-tour="add-conversation" variant="primary" size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setAdd(true)}>
               Add conversation
@@ -139,7 +139,7 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
         tabs={[
           { key: "status", label: "Deal status", tour: "tab-status" },
           { key: "timeline", label: "Timeline", tour: "tab-timeline" },
-          { key: "tasks", label: "Tasks", count: suggested.length + needsAnswer + unreviewed, tour: "tab-tasks" },
+          { key: "tasks", label: "Requests", count: suggested.length + needsAnswer + unreviewed, tour: "tab-tasks" },
           { key: "files", label: "Files", tour: "tab-files" },
         ]}
       />
@@ -230,14 +230,9 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
 
       {tab === "tasks" ? (
         <div className="mt-4 space-y-5">
-          {!preview ? (
-            <Button icon={<Plus className="h-4 w-4" />} onClick={() => setNewTask(true)}>
-              New task
-            </Button>
-          ) : null}
           {data.tasks.length === 0 ? (
             <Card>
-              <Empty icon={<Sparkles className="h-5 w-5" />} title="No tasks yet" body={`After each conversation, suggested follow-up work shows up here. You can also write your own task for ${vaName}.`} />
+              <Empty icon={<Sparkles className="h-5 w-5" />} title="No requests yet" body={`After each conversation, suggested follow-up work shows up here. You can also submit your own request to ${vaName}.`} />
             </Card>
           ) : null}
           {suggested.length ? (
@@ -250,7 +245,7 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
                     {!preview ? (
                       <div className="mt-3 flex flex-wrap gap-2">
                         <Button size="sm" variant="primary" busy={busy === t.id} onClick={() => act(t.id, "assignTask", { task_id: t.id }, `Sent to ${vaName}.`)}>
-                          Assign to {vaName}
+                          Send to {vaName}
                         </Button>
                         <Button size="sm" onClick={() => setTaskId(t.id)}>
                           Edit
@@ -294,9 +289,9 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
         <div className="mt-4 space-y-5">
           {(
             [
-              { title: `Delivered by ${vaName}`, rows: data.files.filter((f) => f.kind === "deliverable"), empty: "Finished work appears here once a task is delivered." },
+              { title: `Delivered by ${vaName}`, rows: data.files.filter((f) => f.kind === "deliverable"), empty: "Finished work appears here once a request is delivered." },
               { title: "Project files", rows: data.files.filter((f) => f.kind === "project"), empty: "Add documents your assistant should know about, such as disclosures or a buyer questionnaire.", upload: true },
-              { title: "Attached to tasks", rows: data.files.filter((f) => f.kind === "attachment"), empty: "" },
+              { title: "Attached to requests", rows: data.files.filter((f) => f.kind === "attachment"), empty: "" },
             ] as const
           ).map((group) =>
             group.rows.length === 0 && !group.empty ? null : (

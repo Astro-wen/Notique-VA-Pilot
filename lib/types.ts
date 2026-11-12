@@ -287,6 +287,10 @@ export interface ProjectDetail {
 export interface ProjectListItem extends Project {
   event_count: number;
   open_tasks: number;
+  /** Delivered work the user has not reviewed yet. */
+  to_review?: number;
+  /** Requests where the VA is waiting on the user. */
+  needs_answer?: number;
   pending_events: number;
   last_activity: string | null;
 }

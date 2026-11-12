@@ -35,7 +35,7 @@ export const TOUR_STEPS: Record<Role, Step[]> = {
     },
     {
       icon: <ClipboardList className="h-6 w-6" />,
-      title: "Tickets are tasks the user assigned to you",
+      title: "Tickets are requests the user sent you",
       body: "Set an ETA first so the user knows when to expect it. Run the timer while you work, attach the deliverable, then mark it delivered.",
       points: ["Blocked? Ask user and pause stops the clock until they answer", "If the user replies by text or email, log the reply on the ticket"],
     },
@@ -78,7 +78,7 @@ export const TOUR_STEPS: Record<Role, Step[]> = {
     {
       icon: <MessageSquare className="h-6 w-6" />,
       title: "Tell us how it went",
-      body: "When a task is delivered, tap Used as is, Edited, or Not used. That is how your assistant learns your style.",
+      body: "When a request is delivered, tap Used as is, Edited, or Not used. That is how your assistant learns your style.",
     },
   ],
 };

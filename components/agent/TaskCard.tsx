@@ -32,7 +32,7 @@ export function TaskFormDialog({ open, onClose, projectId, task, onSaved, projec
   }, [open, task]);
   async function save() {
     if (!task && !pid) return toast("Choose which client this is for.", { tone: "error" });
-    if (!title.trim() || !description.trim()) return toast("Add a title and a short description.", { tone: "error" });
+    if (!title.trim() || !description.trim()) return toast("Say what you need and add a few details.", { tone: "error" });
     setBusy(true);
     try {
       const saved = task ? await rpc<Task>("updateTask", { task_id: task.id, title, description, category }) : await rpc<Task>("createTask", { project_id: pid, title, description, category });
@@ -48,12 +48,12 @@ export function TaskFormDialog({ open, onClose, projectId, task, onSaved, projec
     <Modal
       open={open}
       onClose={onClose}
-      title={task ? "Edit task" : "New task"}
+      title={task ? "Edit request" : "Submit a request"}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" busy={busy} onClick={save}>
-            {task ? "Save" : "Send to assistant"}
+            {task ? "Save" : "Submit request"}
           </Button>
         </>
       }
@@ -126,7 +126,7 @@ export function TaskCard({ taskId, vaName, tz, preview, onClose, onChanged }: { 
   const label = "text-xs font-semibold uppercase tracking-wide text-ink-3";
 
   return (
-    <Modal open={!!taskId} onClose={onClose} title={task ? `Task ${taskNo(task.number)}` : "Task"} wide>
+    <Modal open={!!taskId} onClose={onClose} title={task ? `Request ${taskNo(task.number)}` : "Request"} wide>
       {error && !data ? <ErrorNote message={error} onRetry={() => reload()} /> : null}
       {loading && !data ? <Spinner /> : null}
       {task && status ? (
@@ -151,23 +151,23 @@ export function TaskCard({ taskId, vaName, tz, preview, onClose, onChanged }: { 
               <div className="mt-3 flex gap-2">
                 {canEdit ? (
                   <Button size="sm" onClick={() => setEdit(true)}>
-                    Edit task
+                    Edit request
                   </Button>
                 ) : null}
                 {canCancel ? (
                   <Button size="sm" variant="ghost" onClick={() => setConfirmCancel(true)}>
-                    Cancel task
+                    Cancel request
                   </Button>
                 ) : null}
               </div>
             ) : null}
-            {!preview && task.status === "in_progress" ? <p className="mt-2 text-xs text-ink-3">Work has started. To change the request, send a message below.</p> : null}
+            {!preview && task.status === "in_progress" ? <p className="mt-2 text-xs text-ink-3">Work has started. To change it, send a message below.</p> : null}
           </div>
 
           {task.status === "suggested" && !preview ? (
             <div className="flex flex-wrap gap-2 rounded-lg bg-page p-3">
               <Button variant="primary" busy={busy === "assign"} onClick={() => run("assign", "assignTask", {}, `Sent to ${vaName}.`)}>
-                Assign to {vaName}
+                Send to {vaName}
               </Button>
               <Button
                 busy={busy === "dismiss"}
@@ -223,7 +223,7 @@ export function TaskCard({ taskId, vaName, tz, preview, onClose, onChanged }: { 
                 messages={data!.messages}
                 viewer={preview ? "va" : "agent"}
                 otherName={preview ? "User" : vaName}
-                disabled={preview ? "Preview only. Messages are sent from the ticket." : task.status === "suggested" ? "Assign this task to start a conversation." : task.status === "cancelled" ? "This task was cancelled." : null}
+                disabled={preview ? "Preview only. Messages are sent from the ticket." : task.status === "suggested" ? "Send this request to start a conversation." : task.status === "cancelled" ? "This request was cancelled." : null}
                 onSent={() => {
                   reload(true);
                   onChanged();
@@ -247,12 +247,12 @@ export function TaskCard({ taskId, vaName, tz, preview, onClose, onChanged }: { 
       <Modal
         open={confirmCancel}
         onClose={() => setConfirmCancel(false)}
-        title="Cancel this task?"
+        title="Cancel this request?"
         footer={
           <>
             <Button onClick={() => setConfirmCancel(false)}>Keep it</Button>
-            <Button variant="danger" busy={busy === "cancel"} onClick={() => run("cancel", "cancelTask", {}, "Task cancelled.")}>
-              Cancel task
+            <Button variant="danger" busy={busy === "cancel"} onClick={() => run("cancel", "cancelTask", {}, "Request cancelled.")}>
+              Cancel request
             </Button>
           </>
         }

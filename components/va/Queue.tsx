@@ -215,7 +215,7 @@ export function Queue({ nav }: { nav: VaNav }) {
             className="border-b border-line px-4 py-3"
             right={
               <Button variant="link" size="sm" onClick={() => nav.go("tasks")}>
-                All tasks
+                All tickets
               </Button>
             }
           >

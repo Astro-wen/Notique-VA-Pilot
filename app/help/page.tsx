@@ -18,8 +18,8 @@ const FAQ: Record<"va" | "agent", [string, string][]> = {
     ["What can I upload?", "A meeting or call recording, a transcript file, screenshots of a text thread, or a note you type after a meeting. Each one goes into a client's project."],
     ["When will I see results?", "By 9:00 AM the next business day in your time zone. The Deal status tab shows a notice while a conversation is being verified."],
     ["Does my assistant contact my clients?", "Never. They only prepare research and drafts for you. Review every deliverable before you send anything."],
-    ["How do I change a task after assigning it?", "You can edit it until work starts. After that, open the task and send a message."],
-    ["What does Ask for changes do?", "It sends the task back to your assistant with your note and it returns to In progress."],
+    ["How do I change a request after sending it?", "You can edit it until work starts. After that, open the request and send a message."],
+    ["What does Ask for changes do?", "It sends the request back to your assistant with your note and it returns to In progress."],
   ],
 };
 

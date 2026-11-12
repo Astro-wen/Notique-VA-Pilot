@@ -105,11 +105,11 @@ function AgentApp() {
                 <h1 className="text-xl font-semibold">All Projects</h1>
                 <p className="mt-0.5 text-[13px] text-ink-3">Hi {me?.profile.name.split(" ")[0]}. One project per client.</p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button onClick={() => setCreate(true)}>New project</Button>
                 {data && data.length > 0 ? (
                   <Button data-tour="new-task" onClick={() => setTask(true)}>
-                    New task
+                    Submit a request
                   </Button>
                 ) : null}
                 <Button data-tour="add-conversation" variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => setAdd(true)}>
@@ -135,15 +135,17 @@ function AgentApp() {
             ) : null}
             <div className="mt-5 space-y-2" data-tour={data && data.length ? "project-list" : undefined}>
               {(data ?? []).map((p) => (
-                <button key={p.id} onClick={() => router.push(`/agent?project=${p.id}`)} className="flex w-full items-center gap-3 rounded-xl border border-line bg-white p-4 text-left hover:border-line-strong">
-                  <span className="min-w-0 flex-1">
+                <button key={p.id} onClick={() => router.push(`/agent?project=${p.id}`)} className="flex w-full flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-line bg-white p-4 text-left hover:border-line-strong">
+                  <span className="min-w-[55%] flex-1">
                     <span className="block truncate font-semibold">{p.client_name}</span>
                     <span className="block truncate text-xs text-ink-3">{p.last_activity ? `Last conversation ${ago(p.last_activity).toLowerCase()}` : "No conversations yet"}</span>
                   </span>
+                  {p.to_review ? <Badge tone="ok">{p.to_review} ready for you</Badge> : null}
+                  {p.needs_answer ? <Badge tone="warn">Needs your answer</Badge> : null}
                   {p.pending_events ? <Badge tone="accent">Being verified</Badge> : null}
                   {p.open_tasks ? (
                     <Badge>
-                      {p.open_tasks} {p.open_tasks === 1 ? "task" : "tasks"}
+                      {p.open_tasks} open {p.open_tasks === 1 ? "request" : "requests"}
                     </Badge>
                   ) : null}
                 </button>

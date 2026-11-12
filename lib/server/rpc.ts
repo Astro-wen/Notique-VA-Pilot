@@ -365,7 +365,7 @@ async function projectList(agentId: string): Promise<ProjectListItem[]> {
   if (projects.length === 0) return [];
   const ids = projects.map((p) => p.id);
   const events = q(await db().from("events").select("project_id,status,occurred_at").in("project_id", ids)) as any[];
-  const tasks = q(await db().from("tasks").select("project_id,status").in("project_id", ids)) as any[];
+  const tasks = q(await db().from("tasks").select("project_id,status,agent_feedback").in("project_id", ids)) as any[];
   return projects.map((p) => {
     const ev = events.filter((e) => e.project_id === p.id);
     const last = ev.map((e) => e.occurred_at).sort().pop() ?? null;
@@ -373,7 +373,9 @@ async function projectList(agentId: string): Promise<ProjectListItem[]> {
       ...p,
       event_count: ev.filter((e) => e.status === "submitted").length,
       pending_events: ev.filter((e) => ["processing", "extracting", "ready", "in_review"].includes(e.status)).length,
-      open_tasks: tasks.filter((t) => t.project_id === p.id && ["suggested", "received", "in_progress", "waiting"].includes(t.status)).length,
+      open_tasks: tasks.filter((t) => t.project_id === p.id && ["received", "in_progress", "waiting"].includes(t.status)).length,
+      to_review: tasks.filter((t) => t.project_id === p.id && t.status === "delivered" && !t.agent_feedback).length,
+      needs_answer: tasks.filter((t) => t.project_id === p.id && t.status === "waiting").length,
       last_activity: last,
     };
   });
