@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FolderKanban, Plus } from "lucide-react";
 import { rpc } from "@/lib/client/api";
-import { ago } from "@/lib/client/format";
+import { ago, dateTime } from "@/lib/client/format";
 import type { Project, ProjectListItem } from "@/lib/types";
 import { AddEventDialog } from "@/components/AddEventDialog";
 import { Authed, useSession } from "@/components/Session";
@@ -103,7 +103,9 @@ function AgentApp() {
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
                 <h1 className="text-xl font-semibold">All Projects</h1>
-                <p className="mt-0.5 text-[13px] text-ink-3">Hi {me?.profile.name.split(" ")[0]}. One project per client.</p>
+                <p className="mt-0.5 text-[13px] text-ink-3">
+                  Hi {me?.profile.name.split(" ")[0]}. {me?.assistant ? `Your assistant is ${me.assistant}.` : "An assistant will be assigned to you shortly."}
+                </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button onClick={() => setCreate(true)}>New project</Button>
@@ -113,7 +115,7 @@ function AgentApp() {
                   </Button>
                 ) : null}
                 <Button data-tour="add-conversation" variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => setAdd(true)}>
-                  Add conversation
+                  Add material
                 </Button>
               </div>
             </div>
@@ -127,7 +129,7 @@ function AgentApp() {
                   body="Upload a recording, transcript, or text thread. Your assistant verifies the facts and suggests follow-up work by 9:00 AM the next business day."
                   action={
                     <Button variant="primary" onClick={() => setAdd(true)}>
-                      Add conversation
+                      Add material
                     </Button>
                   }
                 />
@@ -142,7 +144,7 @@ function AgentApp() {
                   </span>
                   {p.to_review ? <Badge tone="ok">{p.to_review} ready for you</Badge> : null}
                   {p.needs_answer ? <Badge tone="warn">Needs your answer</Badge> : null}
-                  {p.pending_events ? <Badge tone="accent">Being verified</Badge> : null}
+                  {p.pending_events ? <Badge tone="accent">Being verified{p.verify_due ? `, ready by ${dateTime(p.verify_due, me?.profile.timezone)}` : ""}</Badge> : null}
                   {p.open_tasks ? (
                     <Badge>
                       {p.open_tasks} open {p.open_tasks === 1 ? "request" : "requests"}
@@ -175,6 +177,7 @@ function AgentApp() {
         }}
       />
       <AddEventDialog
+        heading="Add a recording, transcript, messages, or notes"
         open={add}
         onClose={() => setAdd(false)}
         projects={data ?? []}

@@ -237,6 +237,8 @@ export interface MeResult {
   profile: Profile;
   /** For VAs and admins: users they can serve. Empty for users. */
   agents: AgentSummary[];
+  /** For users: the name of the VA assigned to them, if any. */
+  assistant?: string | null;
 }
 
 export interface QueueEvent extends EventRow {
@@ -279,6 +281,8 @@ export interface ProjectDetail {
   files: FileRow[];
   shareLink: ShareLink | null;
   pendingEvents: number;
+  /** When the last conversation still being verified is due. */
+  pendingDue?: string | null;
   /** Uploads still being transcribed or read. */
   processingEvents: number;
   lastVerified: { at: string; by: string } | null;
@@ -289,6 +293,7 @@ export interface ProjectListItem extends Project {
   open_tasks: number;
   /** Delivered work the user has not reviewed yet. */
   to_review?: number;
+  verify_due?: string | null;
   /** Requests where the VA is waiting on the user. */
   needs_answer?: number;
   pending_events: number;

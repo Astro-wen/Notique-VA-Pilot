@@ -96,6 +96,17 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
 
   const resolve = (fact: Fact) => act(fact.id, "resolveFact", { fact_id: fact.id }, "Marked resolved.", () => rpc("resolveFact", { fact_id: fact.id, undo: true }));
 
+  const firstOf = (list: Task[]) => () => {
+    setTab("tasks");
+    if (list.length === 1) setTaskId(list[0].id);
+  };
+  const waiting = active.filter((t) => t.status === "waiting");
+  const toReview = delivered.filter((t) => !t.agent_feedback);
+  const attention: { text: string; action: string; go: () => void; primary?: boolean }[] = [];
+  if (waiting.length) attention.push({ text: `${vaName} has ${waiting.length === 1 ? "a question" : `${waiting.length} questions`} for you`, action: "Answer", go: firstOf(waiting), primary: true });
+  if (toReview.length) attention.push({ text: `${toReview.length} finished ${toReview.length === 1 ? "request is" : "requests are"} ready to review`, action: "Review", go: firstOf(toReview), primary: !waiting.length });
+  if (suggested.length) attention.push({ text: `${suggested.length} suggested ${suggested.length === 1 ? "follow-up" : "follow-ups"} from your conversations`, action: "See suggestions", go: () => setTab("tasks") });
+
   const byDay = new Map<string, EventRow[]>();
   for (const e of data.events) {
     const key = dateOnly(e.occurred_at, tz);
@@ -126,7 +137,7 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
               Submit a request
             </Button>
             <Button data-tour="add-conversation" variant="primary" size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setAdd(true)}>
-              Add conversation
+              Add material
             </Button>
           </div>
         ) : null}
@@ -144,6 +155,22 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
         ]}
       />
 
+      {!preview && attention.length ? (
+        <div className="mt-4 rounded-xl border border-line bg-white p-3.5">
+          <div className="text-xs font-semibold uppercase tracking-wide text-ink-3">Waiting on you</div>
+          <ul className="mt-2 space-y-2">
+            {attention.map((a) => (
+              <li key={a.text} className="flex items-center justify-between gap-3 text-sm">
+                <span>{a.text}</span>
+                <Button size="sm" variant={a.primary ? "primary" : "outline"} onClick={a.go}>
+                  {a.action}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {tab === "status" ? (
         <div className="mt-4 space-y-4">
           {data.lastVerified ? (
@@ -158,7 +185,7 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
             <div className="flex items-center gap-2 rounded-xl bg-accent-soft px-3.5 py-2.5 text-[13px] text-[#2f55cc]">
               <Clock className="h-4 w-4 shrink-0" />
               <span>
-                {data.pendingEvents} new {data.pendingEvents === 1 ? "conversation is" : "conversations are"} being verified. Expect an update by 9:00 AM the next business day.
+                {data.pendingEvents} new {data.pendingEvents === 1 ? "conversation is" : "conversations are"} being verified{data.va ? ` by ${vaName}` : ""}. {data.pendingDue ? `Ready by ${dateTime(data.pendingDue, tz, true)}.` : "Expect an update by 9:00 AM the next business day."}
               </span>
             </div>
           ) : null}
@@ -166,9 +193,9 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
             <Card>
               <Empty
                 icon={<FileText className="h-5 w-5" />}
-                title={data.pendingEvents ? "Verification in progress" : "No conversations yet"}
+                title={data.pendingEvents ? "Verification in progress" : "Nothing added yet"}
                 body={data.pendingEvents ? `${vaName === "your assistant" ? "Your assistant" : vaName} is checking the facts against the transcript. Decisions, changes, and open questions will show here.` : "Add a recording, transcript, or text thread and this page fills in with what was decided and what is still open."}
-                action={!preview && !data.pendingEvents ? <Button onClick={() => setAdd(true)}>Add conversation</Button> : null}
+                action={!preview && !data.pendingEvents ? <Button onClick={() => setAdd(true)}>Add material</Button> : null}
               />
             </Card>
           ) : (
@@ -324,6 +351,7 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
         }}
       />
       <AddEventDialog
+        heading="Add a recording, transcript, messages, or notes"
         open={add}
         onClose={() => setAdd(false)}
         projects={[data.project]}

@@ -31,9 +31,11 @@ interface Props {
   defaultKind?: AddKind;
   onCreated: (event: EventRow) => void;
   onProjectCreated?: (project: Project) => void;
+  /** Dialog heading. The user side calls this adding material. */
+  heading?: string;
 }
 
-export function AddEventDialog({ open, onClose, projects, agentId, defaultProjectId, defaultKind, onCreated, onProjectCreated }: Props) {
+export function AddEventDialog({ open, onClose, projects, agentId, defaultProjectId, defaultKind, onCreated, onProjectCreated, heading }: Props) {
   const [kind, setKind] = useState<AddKind>(defaultKind ?? "audio");
   const [projectId, setProjectId] = useState(defaultProjectId ?? "");
   const [newClient, setNewClient] = useState("");
@@ -123,7 +125,7 @@ export function AddEventDialog({ open, onClose, projects, agentId, defaultProjec
     <Modal
       open={open}
       onClose={busy ? () => {} : onClose}
-      title="Add a conversation"
+      title={heading ?? "Add a conversation"}
       wide
       footer={
         <>
@@ -132,7 +134,7 @@ export function AddEventDialog({ open, onClose, projects, agentId, defaultProjec
             Cancel
           </Button>
           <Button variant="primary" onClick={submit} busy={!!busy}>
-            Add to queue
+            {heading ? "Send for verification" : "Add to queue"}
           </Button>
         </>
       }

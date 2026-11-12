@@ -291,7 +291,7 @@ export const TOURS = {
     { target: "tab-timeline", title: "Timeline", body: "Each conversation in order, with its summary." },
     { target: "tab-tasks", title: "Requests", body: "Suggested follow-up work appears here. Send what you want done, edit it first, or submit your own. Your assistant never contacts your clients." },
     { target: "tab-files", title: "Files", body: "Everything delivered to you, plus documents you share with your assistant." },
-    { target: "add-conversation", title: "After every meeting", body: "Add the conversation here. Verified results arrive by 9:00 AM the next business day." },
+    { target: "add-conversation", title: "After every meeting", body: "Add the recording or your notes here. Verified results arrive by 9:00 AM the next business day." },
   ],
   admin: [
     { target: "admin-add", title: "Add people", body: "Create a login for each VA and user with a temporary password, then share it with them directly." },

@@ -61,7 +61,7 @@ export const TOUR_STEPS: Record<Role, Step[]> = {
   agent: [
     {
       icon: <FileAudio className="h-6 w-6" />,
-      title: "Add a conversation",
+      title: "Add material",
       body: "Upload a recording, a transcript, a text thread, or a quick voice memo after a meeting. One project per client.",
     },
     {
