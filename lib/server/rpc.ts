@@ -575,6 +575,22 @@ export const handlers: Record<string, Handler> = {
     if (typeof args.name === "string") patch.name = str(args.name, "Name", 80);
     if ("company" in args) patch.company = optStr(args.company, 120);
     if (typeof args.timezone === "string") patch.timezone = str(args.timezone, "Time zone", 60);
+    if (typeof args.role === "string") {
+      if (!["admin", "va", "agent"].includes(args.role)) throw new RpcError("Role must be Admin, VA, or User.");
+      const current = q(await db().from("profiles").select("role").eq("id", id).maybeSingle()) as { role: string } | null;
+      if (!current) throw new RpcError("Account not found.", 404);
+      if (current.role !== args.role) {
+        if (id === me(ctx).id) throw new RpcError("You cannot change your own role.");
+        if (current.role === "agent") {
+          const owned = await db().from("projects").select("id", { count: "exact", head: true }).eq("agent_id", id);
+          if ((owned.count ?? 0) > 0) throw new RpcError("This user already has projects, so the role cannot be changed. Create a separate VA account instead.");
+        }
+        // Old assignments no longer make sense under the new role.
+        await db().from("assignments").delete().or(`va_id.eq.${id},agent_id.eq.${id}`);
+        patch.role = args.role;
+      }
+    }
+    if (Object.keys(patch).length === 0) return { ok: true };
     q(await db().from("profiles").update(patch).eq("id", id).select("id"));
     return { ok: true };
   },

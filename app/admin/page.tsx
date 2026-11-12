@@ -4,7 +4,7 @@ import Link from "next/link";
 import { KeyRound, Plus } from "lucide-react";
 import { rpc } from "@/lib/client/api";
 import type { AdminUser } from "@/lib/types";
-import { Authed } from "@/components/Session";
+import { Authed, useSession } from "@/components/Session";
 import { UserMenu } from "@/components/UserMenu";
 import { Coach, TOURS } from "@/components/Coach";
 import { Badge, Button, Card, Empty, ErrorNote, Field, Input, Logo, Modal, Select, Spinner, useLoad, useToast } from "@/components/ui";
@@ -14,6 +14,7 @@ const ROLE_LABEL = { admin: "Admin", va: "VA", agent: "User" } as const;
 
 function AdminPage() {
   const toast = useToast();
+  const { me } = useSession();
   const { data, error, loading, reload } = useLoad(() => rpc<AdminUser[]>("adminListUsers"), []);
   const [create, setCreate] = useState(false);
   const [reset, setReset] = useState<AdminUser | null>(null);
@@ -56,6 +57,16 @@ function AdminPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function changeRole(u: AdminUser, role: string) {
+    try {
+      await rpc("adminUpdateUser", { user_id: u.id, role });
+      toast(`${u.name} is now ${ROLE_LABEL[role as keyof typeof ROLE_LABEL]}.`);
+    } catch (err) {
+      toast((err as Error).message, { tone: "error" });
+    }
+    reload(true);
   }
 
   async function toggle(va: AdminUser, agentId: string, on: boolean) {
@@ -102,7 +113,15 @@ function AdminPage() {
                       <div className="truncate font-medium">{u.name}</div>
                       <div className="truncate text-xs text-ink-3">{[u.email, u.company, u.timezone].filter(Boolean).join(", ")}</div>
                     </div>
-                    <Badge tone={u.role === "admin" ? "dark" : u.role === "va" ? "accent" : "neutral"}>{ROLE_LABEL[u.role]}</Badge>
+                    {u.id === me?.profile.id ? (
+                      <Badge tone="dark">{ROLE_LABEL[u.role]} (you)</Badge>
+                    ) : (
+                      <Select aria-label={`Role for ${u.name}`} className="!h-8 !w-28" value={u.role} onChange={(e) => changeRole(u, e.target.value)}>
+                        <option value="agent">User</option>
+                        <option value="va">VA</option>
+                        <option value="admin">Admin</option>
+                      </Select>
+                    )}
                     <Button size="sm" icon={<KeyRound className="h-3.5 w-3.5" />} onClick={() => setReset(u)}>
                       Reset password
                     </Button>
