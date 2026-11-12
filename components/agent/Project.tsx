@@ -363,11 +363,16 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
         }}
       />
       <AddEventDialog
-        heading="Add a recording, transcript, messages, or notes"
+        heading="Add material"
         open={add}
         onClose={() => setAdd(false)}
         projects={[data.project]}
         defaultProjectId={projectId}
+        onFilesAdded={(_pid, n) => {
+          reload(true);
+          setTab("files");
+          toast(n === 1 ? "File added. Your assistant can see it." : `${n} files added. Your assistant can see them.`);
+        }}
         onCreated={(e) => {
           reload(true);
           toast(e.status === "failed" ? `We could not process it: ${e.error}` : "Received. Your assistant will verify it.", e.status === "failed" ? { tone: "error" } : undefined);

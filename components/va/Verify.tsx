@@ -36,6 +36,7 @@ function typing(target: EventTarget | null): boolean {
 }
 
 interface Draft {
+  section: Section;
   statement: string;
   follow_up_date: string;
   follow_up_condition: string;
@@ -45,6 +46,7 @@ interface Draft {
 
 function toDraft(f: Fact): Draft {
   return {
+    section: f.section,
     statement: f.statement,
     follow_up_date: f.follow_up_date ?? "",
     follow_up_condition: f.follow_up_condition ?? "",
@@ -70,6 +72,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [showKeys, setShowKeys] = useState(false);
   const [nudge, setNudge] = useState(false);
+  const [summaryDraft, setSummaryDraft] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const unsent = useRef(0);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -184,11 +187,12 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
   async function saveEdit(fact: Fact) {
     if (!draft) return;
     if (!draft.statement.trim()) return toast("The statement cannot be empty.", { tone: "error" });
-    const canTask = fact.section === "questions" || fact.section === "next_steps";
+    const canTask = draft.section === "questions" || draft.section === "next_steps";
     if (canTask && draft.withTask && !draft.task.title.trim()) return toast("Give the suggested task a title, or untick it.", { tone: "error" });
     const unchanged = draft.statement.trim() === (fact.ai_statement ?? fact.statement).trim();
     setEditId(null);
     await decide(fact, unchanged && fact.origin === "ai" && (fact.confidence ?? 1) >= 0.6 ? "approved" : "edited", {
+      ...(draft.section !== fact.section ? { section: draft.section } : {}),
       statement: draft.statement.trim(),
       follow_up_date: draft.follow_up_date || null,
       follow_up_condition: draft.follow_up_condition || null,
@@ -211,6 +215,19 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
     setDetail({ ...detail, event: { ...detail.event, checks: next } });
     try {
       await rpc("updateEventMeta", { event_id: eventId, checks: { [key]: value } });
+    } catch (err) {
+      toast((err as Error).message, { tone: "error" });
+      load();
+    }
+  }
+
+  async function saveSummary() {
+    if (!detail || summaryDraft === null) return;
+    const next = summaryDraft.trim();
+    setDetail({ ...detail, event: { ...detail.event, summary: next || null } });
+    setSummaryDraft(null);
+    try {
+      await rpc("updateEventMeta", { event_id: eventId, summary: next });
     } catch (err) {
       toast((err as Error).message, { tone: "error" });
       load();
@@ -571,7 +588,33 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
         {/* Facts */}
         <section aria-label="Items to verify" className="flex min-h-0 flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-            {event.summary ? <p className="mb-3 rounded-lg bg-white px-3 py-2 text-[13px] text-ink-2 ring-1 ring-line">{event.summary}</p> : null}
+            <div className="mb-3 rounded-lg bg-white px-3 py-2 ring-1 ring-line">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wide text-ink-3">Summary for the user&apos;s timeline</span>
+                {!readOnly && summaryDraft === null ? (
+                  <Button size="sm" variant="ghost" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => setSummaryDraft(event.summary ?? "")}>
+                    Edit
+                  </Button>
+                ) : null}
+              </div>
+              {summaryDraft !== null ? (
+                <div className="mt-1.5 space-y-2">
+                  <Textarea autoFocus rows={3} aria-label="Summary" value={summaryDraft} onChange={(e) => setSummaryDraft(e.target.value)} />
+                  <div className="flex justify-end gap-2">
+                    <Button size="sm" onClick={() => setSummaryDraft(null)}>
+                      Cancel
+                    </Button>
+                    <Button size="sm" variant="primary" onClick={saveSummary}>
+                      Save summary
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-1 text-[13px] text-ink-2">{event.summary || "No summary yet. Add one or two sentences on what happened."}</p>
+              )}
+              {event.summary && PROTECTED.test(event.summary) && summaryDraft === null ? <p className="mt-1 text-xs font-medium text-bad">This summary may mention a protected characteristic. Reword it before you submit.</p> : null}
+              {!readOnly ? <p className="mt-1 text-xs text-ink-3">The user sees this on their timeline once you submit. Fix anything that is wrong.</p> : null}
+            </div>
             {facts.length === 0 ? (
               <div className="rounded-xl border border-dashed border-line-strong bg-white p-6 text-center">
                 <div className="font-semibold">The AI found nothing to verify</div>
@@ -615,6 +658,15 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
 
                           {editing ? (
                             <div className="mt-2.5 space-y-3">
+                              <Field label="Section" hint="Move it if it was filed in the wrong place. Something the user still has to ask the client belongs in Open questions.">
+                                <Select value={draft.section} onChange={(e) => setDraft({ ...draft, section: e.target.value as Section })}>
+                                  {SECTIONS.map((sec) => (
+                                    <option key={sec.key} value={sec.key}>
+                                      {sec.label}
+                                    </option>
+                                  ))}
+                                </Select>
+                              </Field>
                               <Textarea autoFocus rows={2} aria-label="Statement" value={draft.statement} onChange={(e) => setDraft({ ...draft, statement: e.target.value })} onKeyDown={(e) => e.key === "Enter" && (e.metaKey || e.ctrlKey) && saveEdit(f)} />
                               <div className="grid gap-3 sm:grid-cols-2">
                                 <Field label="Follow up on" hint="Optional date">

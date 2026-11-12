@@ -466,6 +466,11 @@ export function ProjectView({ nav, projectId, tab, taskId }: { nav: VaNav; proje
         projects={[project]}
         agentId={nav.agent.id}
         defaultProjectId={projectId}
+        onFilesAdded={(_pid, n) => {
+          reload(true);
+          setTab("documents");
+          toast(n === 1 ? "File added to the project." : `${n} files added to the project.`);
+        }}
         onCreated={(e) => {
           reload(true);
           nav.refreshCounts();

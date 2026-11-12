@@ -151,7 +151,7 @@ function stripEvent(e: any, forAgent = false): EventRow {
   void _r; void _s; void _p; void _b; void _c;
   if (!forAgent) return rest as EventRow;
   // Agents only get what a VA has verified. The AI summary and internal review data stay on the VA side.
-  return { ...rest, summary: null, checks: {}, review_ms: 0, escalation_note: null, audio_path: null, speaker_map: {}, error: rest.status === "failed" ? rest.error : null } as EventRow;
+  return { ...rest, summary: rest.status === "submitted" ? rest.summary : null, checks: {}, review_ms: 0, escalation_note: null, audio_path: null, speaker_map: {}, error: rest.status === "failed" ? rest.error : null } as EventRow;
 }
 
 async function fetchLines(eventId: string): Promise<any[]> {
@@ -1043,7 +1043,7 @@ export const handlers: Record<string, Handler> = {
     const event = await loadEvent(p, args.event_id);
     const patch: Record<string, unknown> = {};
     const locked = event.status === "submitted";
-    if (locked && (args.checks || args.speaker_map || typeof args.title === "string")) {
+    if (locked && (args.checks || args.speaker_map || typeof args.title === "string" || typeof args.summary === "string")) {
       throw new RpcError("This event is already submitted. Reopen it to make changes.");
     }
     if (args.checks && typeof args.checks === "object") {
@@ -1061,6 +1061,7 @@ export const handlers: Record<string, Handler> = {
       patch.speaker_map = next;
     }
     if (typeof args.title === "string") patch.title = str(args.title, "Title", 120);
+    if (typeof args.summary === "string") patch.summary = args.summary.trim().slice(0, 800) || null;
     if (Number.isFinite(Number(args.add_ms)) && Number(args.add_ms) > 0 && event.status !== "submitted") {
       patch.review_ms = Number(event.review_ms) + Math.min(Number(args.add_ms), 120000);
     }
@@ -1078,6 +1079,12 @@ export const handlers: Record<string, Handler> = {
     const verdict = str(args.verdict, "Verdict", 20) as Verdict;
     if (!["pending", "approved", "edited", "declined", "insufficient"].includes(verdict)) throw new RpcError("Unknown verdict.");
     const patch: Record<string, unknown> = { verdict };
+    if (typeof args.section === "string") {
+      if (!["decisions", "budget", "needs", "questions", "risks", "next_steps"].includes(args.section)) throw new RpcError("Choose a section.");
+      patch.section = args.section;
+      // A suggested task only makes sense on a question or a next step.
+      if (!["questions", "next_steps"].includes(args.section) && !("suggested_task" in args)) patch.suggested_task = null;
+    }
     if (verdict === "approved" && fact.origin === "ai" && fact.confidence !== null && Number(fact.confidence) < 0.6) {
       throw new RpcError("Low confidence items cannot be approved as written. Edit the wording, decline it, or mark it insufficient.");
     }

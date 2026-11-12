@@ -114,6 +114,7 @@ function Processing({ rows, nav, reload }: { rows: QueueEvent[]; nav: VaNav; rel
 }
 
 export function Queue({ nav }: { nav: VaNav }) {
+  const toast = useToast();
   const { data, error, loading, reload } = useQueue(nav);
   const [add, setAdd] = useState<AddKind | null>(null);
   if (error && !data) return <ErrorNote message={error} onRetry={() => reload()} />;
@@ -248,6 +249,7 @@ export function Queue({ nav }: { nav: VaNav }) {
         onClose={() => setAdd(null)}
         projects={data.projects}
         agentId={nav.agent.id}
+        onFilesAdded={(_pid, n) => toast(n === 1 ? "File added to the project. Find it under Projects, Documents." : `${n} files added to the project. Find them under Projects, Documents.`)}
         onCreated={() => {
           reload(true);
           nav.refreshCounts();
@@ -266,6 +268,7 @@ const SOURCE_CARDS: { kind: AddKind | null; keys: string[]; title: string; mode:
 ];
 
 export function Sources({ nav }: { nav: VaNav }) {
+  const toast = useToast();
   const { data, error, loading, reload } = useQueue(nav);
   const [add, setAdd] = useState<AddKind | null>(null);
   if (error && !data) return <ErrorNote message={error} onRetry={() => reload()} />;
@@ -315,6 +318,7 @@ export function Sources({ nav }: { nav: VaNav }) {
         onClose={() => setAdd(null)}
         projects={data.projects}
         agentId={nav.agent.id}
+        onFilesAdded={(_pid, n) => toast(n === 1 ? "File added to the project. Find it under Projects, Documents." : `${n} files added to the project. Find them under Projects, Documents.`)}
         onCreated={() => {
           reload(true);
           nav.refreshCounts();

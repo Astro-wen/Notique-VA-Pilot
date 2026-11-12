@@ -177,11 +177,16 @@ function AgentApp() {
         }}
       />
       <AddEventDialog
-        heading="Add a recording, transcript, messages, or notes"
+        heading="Add material"
         open={add}
         onClose={() => setAdd(false)}
         projects={data ?? []}
         onProjectCreated={() => reload(true)}
+        onFilesAdded={(pid, n) => {
+          reload(true);
+          toast(n === 1 ? "File added to the project. Your assistant can see it." : `${n} files added to the project. Your assistant can see them.`);
+          router.push(`/agent?project=${pid}`);
+        }}
         onCreated={(e) => {
           reload(true);
           toast(e.status === "failed" ? `We could not process it: ${e.error}` : "Received. Your assistant will verify it.", e.status === "failed" ? { tone: "error" } : undefined);

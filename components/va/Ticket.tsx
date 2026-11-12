@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
-import { Pause, Play, Send } from "lucide-react";
-import { rpc } from "@/lib/client/api";
+import { useEffect, useRef, useState } from "react";
+import { ImagePlus, Pause, Play, Send, X } from "lucide-react";
+import { rpc, uploadFile } from "@/lib/client/api";
 import { CHANNEL_LABEL, FEEDBACK_LABEL, TASK_STATUS_LABEL, clock, dateOnly, dateTime, remaining, taskNo, toLocalInput, tzAbbr } from "@/lib/client/format";
 import { TASK_CATEGORIES, type Task, type TaskDetail, type TaskStatus } from "@/lib/types";
 import { AddFile, FileItem } from "../FileList";
@@ -19,8 +19,11 @@ export function NewTicketDialog({ open, onClose, projectId, onCreated }: { open:
   const [category, setCategory] = useState("Research");
   const [via, setVia] = useState("");
   const [busy, setBusy] = useState(false);
+  const [proof, setProof] = useState<File[]>([]);
+  const proofRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (open) {
+      setProof([]);
       setTitle("");
       setDescription("");
       setCategory("Research");
@@ -32,7 +35,18 @@ export function NewTicketDialog({ open, onClose, projectId, onCreated }: { open:
     if (!via) return toast("Choose how the user asked for this.", { tone: "error" });
     setBusy(true);
     try {
-      onCreated(await rpc<Task>("createTask", { project_id: projectId, title, description, category, requested_via: via }));
+      const task = await rpc<Task>("createTask", { project_id: projectId, title, description, category, requested_via: via });
+      let failed = 0;
+      for (const file of proof) {
+        try {
+          const up = await uploadFile(projectId, file);
+          await rpc("addFile", { project_id: projectId, task_id: task.id, kind: "attachment", name: up.name, path: up.path, size: up.size, mime: up.mime, note: "Proof of request" });
+        } catch {
+          failed += 1;
+        }
+      }
+      if (failed) toast(`The ticket was created, but ${failed === 1 ? "one screenshot" : `${failed} screenshots`} did not upload. Add it from the ticket.`, { tone: "error" });
+      onCreated(task);
       onClose();
     } catch (err) {
       toast((err as Error).message, { tone: "error" });
@@ -54,7 +68,7 @@ export function NewTicketDialog({ open, onClose, projectId, onCreated }: { open:
         </>
       }
     >
-      <p className="text-[13px] text-ink-3">Only log work the user actually asked for. The user sees this ticket in their Tasks.</p>
+      <p className="text-[13px] text-ink-3">Log every piece of work the user asks for by text, email, or call, so nothing is lost and the deadline is tracked. The user sees it under Requests.</p>
       <div className="mt-4 space-y-4">
         <Field label="Title">
           <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} placeholder="Shortlist 3 bed homes near Lincoln Elementary" />
@@ -81,6 +95,22 @@ export function NewTicketDialog({ open, onClose, projectId, onCreated }: { open:
             </Select>
           </Field>
         </div>
+        <Field label="Proof of the request" hint="Optional. Attach a screenshot of the text or email where the user asked.">
+          <input ref={proofRef} type="file" hidden multiple accept="image/*,.pdf" onChange={(e) => setProof([...proof, ...Array.from(e.target.files ?? [])].slice(0, 4))} />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" icon={<ImagePlus className="h-3.5 w-3.5" />} onClick={() => proofRef.current?.click()}>
+              Attach screenshot
+            </Button>
+            {proof.map((f, i) => (
+              <span key={`${f.name}-${i}`} className="inline-flex h-7 max-w-[220px] items-center gap-1 rounded-full bg-page pl-2.5 pr-1 text-xs text-ink-2">
+                <span className="truncate">{f.name}</span>
+                <button aria-label={`Remove ${f.name}`} className="rounded-full p-0.5 hover:bg-line" onClick={() => setProof(proof.filter((_, j) => j !== i))}>
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        </Field>
       </div>
     </Modal>
   );
