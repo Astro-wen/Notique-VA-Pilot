@@ -23,7 +23,7 @@ export function TasksView({ nav }: { nav: VaNav }) {
   };
   const rows = sets[filter];
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-6xl">
       <h1 className="text-xl font-semibold">Tickets</h1>
       <p className="mt-0.5 text-[13px] text-ink-3">Every ticket for {nav.agent.name}, across all projects. Tickets without an ETA come first.</p>
       <Tabs

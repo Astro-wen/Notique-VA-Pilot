@@ -300,7 +300,7 @@ risks: concerns, objections, hesitations, or anything that could stall the deal.
 next_steps: agreed actions with an owner, such as scheduling a showing or sending listings.
 
 Rules:
-1. Every fact must cite at least one line number that exists in the transcript. Never cite a line that does not support the statement.
+1. Every fact must cite at least one line number that exists in the transcript. Cite the fewest lines that prove it, usually one and at most three. Never cite a line that does not support the statement on its own, such as a transition or an acknowledgement.
 2. Keep amounts, dates, addresses, and conditions exactly as said. Keep qualifiers such as "if", "unless", "about".
 3. Do not infer financial ability, intent, or personal characteristics that were not said. Fair housing: never mention race, color, religion, national origin, sex, disability, familial status (marital status, children, pregnancy), age, or military or veteran status, in any fact or in the summary, even when the client volunteers it. Record the property requirement instead, for example "needs at least four bedrooms" rather than "has three kids", "no school district preference" rather than "his son is in elementary school", and "plans to use a VA loan" rather than "is a veteran". Before returning, reread every statement and the summary and remove any mention of a spouse, children, family, age, retirement, religion, disability, or military service.
 4. Use change_type "changed" only when the transcript itself or the earlier verified facts show a different earlier value.

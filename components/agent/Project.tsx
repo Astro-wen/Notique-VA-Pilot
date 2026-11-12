@@ -129,7 +129,7 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
       <div className="mt-2 flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
         <div className="min-w-0">
           <h1 className="text-xl font-semibold">{data.project.client_name}</h1>
-          <p className="text-[13px] text-ink-3">{projectLine(data.project)}</p>
+          <p className="text-[13px] text-ink-3">{projectLine(data.facts.some((f) => f.section === "budget") ? { ...data.project, budget: null } : data.project)}</p>
         </div>
         {!preview ? (
           <div className="flex gap-2">
@@ -155,7 +155,7 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
         ]}
       />
 
-      {!preview && attention.length ? (
+      {!preview && tab === "status" && attention.length ? (
         <div className="mt-4 rounded-xl border border-line bg-white p-3.5">
           <div className="text-xs font-semibold uppercase tracking-wide text-ink-3">Waiting on you</div>
           <ul className="mt-2 space-y-2">
@@ -234,11 +234,23 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
                         <Badge tone="ok">Verified</Badge>
                       </div>
                       {e.summary ? <p className="mt-2 text-sm text-ink-2">{e.summary}</p> : null}
+                      {facts.length && !open ? (
+                        <ul className="mt-2 space-y-1">
+                          {facts.slice(0, 3).map((f) => (
+                            <li key={f.id} className="flex gap-2 text-sm text-ink-2">
+                              <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-ink-3" />
+                              {f.statement}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
                       {facts.length ? (
                         <button className="mt-2 text-[13px] font-medium text-accent hover:underline" aria-expanded={open} onClick={() => setOpenEvent(open ? null : e.id)}>
-                          {open ? "Hide facts" : `Show ${facts.length} ${facts.length === 1 ? "fact" : "facts"}`}
+                          {open ? "Show less" : facts.length > 3 ? `Show all ${facts.length} facts with sources` : "Show sources"}
                         </button>
-                      ) : null}
+                      ) : (
+                        <p className="mt-2 text-[13px] text-ink-3">Nothing new for the deal came out of this one.</p>
+                      )}
                       {open ? (
                         <div className="mt-1 divide-y divide-line">
                           {facts.map((f) => (

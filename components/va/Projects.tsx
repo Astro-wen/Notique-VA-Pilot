@@ -273,7 +273,7 @@ export function ProjectView({ nav, projectId, tab, taskId }: { nav: VaNav; proje
               <Pencil className="h-3.5 w-3.5" />
             </IconButton>
           </div>
-          <p className="text-[13px] text-ink-3">{projectLine(project)}</p>
+          <p className="text-[13px] text-ink-3">{projectLine(data.facts.some((f) => f.section === "budget") ? { ...project, budget: null } : project)}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" icon={<Eye className="h-3.5 w-3.5" />} onClick={() => nav.go("preview", { id: projectId })}>

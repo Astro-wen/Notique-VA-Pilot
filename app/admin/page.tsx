@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { KeyRound, Plus, Trash2 } from "lucide-react";
+import { KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
 import { rpc } from "@/lib/client/api";
 import type { AdminUser } from "@/lib/types";
 import { Authed, useSession } from "@/components/Session";
@@ -19,6 +19,8 @@ function AdminPage() {
   const [create, setCreate] = useState(false);
   const [reset, setReset] = useState<AdminUser | null>(null);
   const [remove, setRemove] = useState<AdminUser | null>(null);
+  const [edit, setEdit] = useState<AdminUser | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", company: "", timezone: "America/Los_Angeles" });
   const [form, setForm] = useState({ name: "", email: "", role: "agent", company: "", timezone: "America/Los_Angeles", password: "" });
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -53,6 +55,22 @@ function AdminPage() {
       toast("Password changed. Share the new one with them directly.");
       setReset(null);
       setPassword("");
+    } catch (err) {
+      toast((err as Error).message, { tone: "error" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveEdit() {
+    if (!edit) return;
+    if (!editForm.name.trim()) return toast("Enter a name.", { tone: "error" });
+    setBusy(true);
+    try {
+      await rpc("adminUpdateUser", { user_id: edit.id, ...editForm });
+      toast("Saved.");
+      setEdit(null);
+      reload(true);
     } catch (err) {
       toast((err as Error).message, { tone: "error" });
     } finally {
@@ -126,7 +144,19 @@ function AdminPage() {
                 {users.map((u) => (
                   <li key={u.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                     <div className="min-w-0 flex-1">
-                      <div className="truncate font-medium">{u.name}</div>
+                      <div className="flex items-center gap-1">
+                        <span className="truncate font-medium">{u.name}</span>
+                        <IconButton
+                          label={`Edit ${u.name}`}
+                          className="!h-6 !w-6"
+                          onClick={() => {
+                            setEditForm({ name: u.name, company: u.company ?? "", timezone: u.timezone });
+                            setEdit(u);
+                          }}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </IconButton>
+                      </div>
                       <div className="truncate text-xs text-ink-3">{[u.email, u.company, u.timezone].filter(Boolean).join(", ")}</div>
                     </div>
                     {u.id === me?.profile.id ? (
@@ -236,6 +266,36 @@ function AdminPage() {
           </div>
           <Field label="Temporary password" hint="At least 8 characters. Share it with them directly.">
             <Input value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} autoComplete="new-password" />
+          </Field>
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!edit}
+        onClose={() => setEdit(null)}
+        title="Edit person"
+        footer={
+          <>
+            <Button onClick={() => setEdit(null)}>Cancel</Button>
+            <Button variant="primary" busy={busy} onClick={saveEdit}>
+              Save
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Field label="Name" hint="Users see their assistant's first name.">
+            <Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+          </Field>
+          <Field label="Company" hint="Optional">
+            <Input value={editForm.company} onChange={(e) => setEditForm({ ...editForm, company: e.target.value })} />
+          </Field>
+          <Field label="Time zone" hint="For a user, deadlines follow this zone.">
+            <Select value={editForm.timezone} onChange={(e) => setEditForm({ ...editForm, timezone: e.target.value })}>
+              {[...new Set([...ZONES, editForm.timezone])].map((z) => (
+                <option key={z}>{z}</option>
+              ))}
+            </Select>
           </Field>
         </div>
       </Modal>

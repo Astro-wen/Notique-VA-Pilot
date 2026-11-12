@@ -30,7 +30,7 @@ export function Qc({ nav }: { nav: VaNav }) {
   const aiTotal = v ? v.approved + v.edited + v.declined + v.insufficient : 0;
   const fbTotal = data ? Object.values(data.feedback).reduce((a, b) => a + b, 0) : 0;
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto max-w-6xl">
       <h1 className="text-xl font-semibold">QC review</h1>
       <p className="mt-0.5 text-[13px] text-ink-3">How the work for {nav.agent.name} is going. Counts cover submitted events and delivered tickets.</p>
       <Tabs

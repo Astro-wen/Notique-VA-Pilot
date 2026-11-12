@@ -480,7 +480,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                 )}
               </div>
             ) : null}
-            {detail.audioUrl ? <audio ref={audioRef} controls preload="none" src={detail.audioUrl} className="h-9 w-full" /> : null}
+            {detail.audioUrl ? <audio ref={audioRef} controls preload="metadata" src={detail.audioUrl} className="h-9 w-full" /> : null}
           </div>
           <div data-tour="transcript" className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
             {detail.lines.length === 0 ? <p className="p-4 text-[13px] text-ink-3">This event has no transcript.</p> : null}
