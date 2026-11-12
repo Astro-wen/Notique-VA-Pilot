@@ -106,8 +106,8 @@ export function Console() {
         <div className="ml-auto flex items-center gap-3">
           {agents.length > 0 && agent ? (
             <label data-tour="agent-select" className="flex items-center gap-2 text-[13px] text-ink-3">
-              <span className="hidden sm:inline">Serving</span>
-              <Select aria-label="Serving agent" className="!h-8 !w-auto max-w-56 font-medium text-ink" value={agent.id} onChange={(e) => chooseAgent(e.target.value)}>
+              <span className="hidden sm:inline">Serving user</span>
+              <Select aria-label="Serving user" className="!h-8 !w-auto max-w-56 font-medium text-ink" value={agent.id} onChange={(e) => chooseAgent(e.target.value)}>
                 {agents.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name}
@@ -149,8 +149,8 @@ export function Console() {
             <Card className="mx-auto mt-10 max-w-md">
               <Empty
                 icon={<Inbox className="h-5 w-5" />}
-                title="No agents assigned yet"
-                body={me?.profile.role === "admin" ? "Add an agent account in Admin, then come back here." : "Ask your admin to assign you to an agent. Once they do, the agent's queue shows up here."}
+                title="No users assigned yet"
+                body={me?.profile.role === "admin" ? "Add a user account in Admin, then come back here." : "Ask your admin to assign you to a user. Once they do, the user's queue shows up here."}
                 action={
                   me?.profile.role === "admin" ? (
                     <Link href="/admin" className="inline-flex h-9 items-center rounded-md bg-ink px-4 text-sm font-medium text-white">

@@ -254,15 +254,15 @@ export function Coach({ name, steps, ready = true, primary }: { name: string; st
 export const TOURS = {
   vaHome: [
     { title: "Welcome to the VA Console", body: "A one minute tour of where things are. Use Next, or the arrow keys. You can replay it any time from your account menu." },
-    { target: "agent-select", title: "Who you are serving", body: "Everything on screen belongs to this agent. Switch here when you work for someone else. Deadlines follow the agent's time zone." },
-    { target: "nav-queue", title: "Queue: start here every shift", body: "Conversations the agent recorded or uploaded, waiting for you to check. The number shows how many are waiting." },
+    { target: "agent-select", title: "Who you are serving", body: "Everything on screen belongs to this user. Switch here when you work for someone else. Deadlines follow the user's time zone." },
+    { target: "nav-queue", title: "Queue: start here every shift", body: "Conversations the user recorded or uploaded, waiting for you to check. The number shows how many are waiting." },
     { target: "queue-table", title: "Events to verify", body: "Sorted by deadline, most urgent on top. Click Verify to open one and check the AI's draft against the transcript." },
-    { target: "add-conversation", title: "Add something yourself", body: "Got a recording, transcript, or text thread from the agent by email or text? Upload it here and it joins the queue." },
+    { target: "add-conversation", title: "Add something yourself", body: "Got a recording, transcript, or text thread from the user by email or text? Upload it here and it joins the queue." },
     { target: "nav-projects", title: "Projects: one per client", body: "Each client has a deal profile with every verified fact, the tickets, and the files." },
-    { target: "nav-tasks", title: "Tasks: work the agent assigned", body: "All open tickets across clients. Set an ETA, run the timer, attach the deliverable, mark it delivered." },
+    { target: "nav-tasks", title: "Tasks: work the user assigned", body: "All open tickets across clients. Set an ETA, run the timer, attach the deliverable, mark it delivered." },
     { target: "nav-sources", title: "Data sources", body: "Every way a conversation can come in, with an upload button for each." },
-    { target: "nav-qc", title: "QC review", body: "Your numbers: how many AI drafts you approved, edited, or declined, and what the agent did with your deliverables." },
-    { target: "user-menu", title: "Help lives here", body: "Replay this tour, open Help, or sign out. One rule to remember: you never contact the agent's clients or any third party." },
+    { target: "nav-qc", title: "QC review", body: "Your numbers: how many AI drafts you approved, edited, or declined, and what the user did with your deliverables." },
+    { target: "user-menu", title: "Help lives here", body: "Replay this tour, open Help, or sign out. One rule to remember: you never contact the user's clients or any third party." },
   ],
   vaVerify: [
     { title: "Checking an event", body: "The transcript is on the left, the AI's drafts are on the right. Your job: decide on every draft, then submit." },
@@ -270,14 +270,14 @@ export const TOURS = {
     { target: "transcript", title: "Click a quote to jump here", body: "The matching line flashes in the transcript. With a recording, the audio jumps to that moment. Rename speakers with the chips above." },
     { target: "add-fact", title: "The AI missed something?", body: "Tick the transcript lines that prove it, then add the fact yourself." },
     { target: "checks", title: "Four checks before you submit", body: "Tick each one once you have confirmed it. If nobody consented to the recording, use Escalate instead of submitting." },
-    { target: "submit", title: "Submit", body: "Unlocks when every draft has a decision and all four checks are ticked. The agent sees approved facts right away. You can reopen for 24 hours." },
+    { target: "submit", title: "Submit", body: "Unlocks when every draft has a decision and all four checks are ticked. The user sees approved facts right away. You can reopen for 24 hours." },
   ],
   vaTicket: [
-    { target: "ticket-eta", title: "Set an ETA first", body: "The agent sees it immediately. Setting it moves the ticket to In progress." },
-    { target: "ticket-timer", title: "Track your time", body: "Start when you begin, pause when you stop. It also pauses on its own when you ask the agent a question." },
-    { target: "ticket-deliverables", title: "Attach the result", body: "Upload a file or paste a link. The agent cannot see it until you mark the ticket delivered." },
-    { target: "ticket-thread", title: "Talk to the agent", body: "Send a message, or use Ask agent and pause when you are blocked. If the agent replies by text or email, log the reply here." },
-    { target: "ticket-deliver", title: "Mark delivered", body: "Sends the deliverables to the agent and stops the timer." },
+    { target: "ticket-eta", title: "Set an ETA first", body: "The user sees it immediately. Setting it moves the ticket to In progress." },
+    { target: "ticket-timer", title: "Track your time", body: "Start when you begin, pause when you stop. It also pauses on its own when you ask the user a question." },
+    { target: "ticket-deliverables", title: "Attach the result", body: "Upload a file or paste a link. The user cannot see it until you mark the ticket delivered." },
+    { target: "ticket-thread", title: "Talk to the user", body: "Send a message, or use Ask user and pause when you are blocked. If the user replies by text or email, log the reply here." },
+    { target: "ticket-deliver", title: "Mark delivered", body: "Sends the deliverables to the user and stops the timer." },
   ],
   agentHome: [
     { title: "Welcome to Notique", body: "Your assistant turns each client conversation into verified notes and follow-up work. Here is where things are." },
@@ -293,7 +293,7 @@ export const TOURS = {
     { target: "add-conversation", title: "After every meeting", body: "Add the conversation here. Verified results arrive by 9:00 AM the next business day." },
   ],
   admin: [
-    { target: "admin-add", title: "Add people", body: "Create a login for each VA and agent with a temporary password, then share it with them directly." },
-    { target: "admin-matrix", title: "Match VAs to agents", body: "A VA only sees the agents ticked here." },
+    { target: "admin-add", title: "Add people", body: "Create a login for each VA and user with a temporary password, then share it with them directly." },
+    { target: "admin-matrix", title: "Match VAs to users", body: "A VA only sees the users ticked here." },
   ],
 } satisfies Record<string, CoachStep[]>;

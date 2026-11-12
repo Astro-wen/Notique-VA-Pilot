@@ -58,7 +58,7 @@ export function FactRow({ fact, tz, action }: { fact: Fact; tz?: string; action?
   );
 }
 
-/** Verified facts grouped by section. Shared by the VA profile, the agent view, and the share page. */
+/** Verified facts grouped by section. Shared by the VA profile, the user view, and the share page. */
 export function DealFacts({ facts, tz, onResolve }: { facts: Fact[]; tz?: string; onResolve?: (fact: Fact) => void }) {
   return (
     <div className="space-y-4">

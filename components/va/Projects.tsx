@@ -140,7 +140,7 @@ function ShareDialog({ open, onClose, projectId, link, onChanged }: { open: bool
   }
   return (
     <Modal open={open} onClose={onClose} title="Read-only link">
-      <p className="text-sm text-ink-2">Anyone with this link can read the verified deal profile without signing in. Tasks, files, and messages are not included. Share it with the agent only.</p>
+      <p className="text-sm text-ink-2">Anyone with this link can read the verified deal profile without signing in. Tasks, files, and messages are not included. Share it with the user only.</p>
       {link ? (
         <div className="mt-4 space-y-3">
           <div className="flex gap-2">
@@ -179,7 +179,7 @@ function ShareDialog({ open, onClose, projectId, link, onChanged }: { open: bool
 const GROUPS: { key: TaskStatus; label: string }[] = [
   { key: "received", label: "Received" },
   { key: "in_progress", label: "In progress" },
-  { key: "waiting", label: "Waiting on agent" },
+  { key: "waiting", label: "Waiting on user" },
   { key: "suggested", label: "Suggested, not assigned yet" },
   { key: "delivered", label: "Delivered" },
   { key: "cancelled", label: "Cancelled" },
@@ -193,7 +193,7 @@ export function TicketRow({ task, active, onClick, tz, showProject }: { task: Ta
         <span className="block truncate text-sm font-medium">{task.title}</span>
         <span className="block truncate text-xs text-ink-3">
           {showProject ? `${task.project_name}, ` : ""}
-          {task.status === "delivered" ? `Delivered ${dateTime(task.delivered_at, tz)}` : task.eta ? `ETA ${dateTime(task.eta, tz)}` : task.status === "suggested" ? "Waiting for the agent" : task.status === "cancelled" ? "Cancelled" : "ETA not set"}
+          {task.status === "delivered" ? `Delivered ${dateTime(task.delivered_at, tz)}` : task.eta ? `ETA ${dateTime(task.eta, tz)}` : task.status === "suggested" ? "Waiting for the user" : task.status === "cancelled" ? "Cancelled" : "ETA not set"}
         </span>
       </span>
       {showProject ? <Badge tone={STATUS_TONE[task.status]}>{TASK_STATUS_LABEL[task.status]}</Badge> : null}
@@ -277,7 +277,7 @@ export function ProjectView({ nav, projectId, tab, taskId }: { nav: VaNav; proje
         </div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" icon={<Eye className="h-3.5 w-3.5" />} onClick={() => nav.go("preview", { id: projectId })}>
-            Agent view
+            User view
           </Button>
           <Button size="sm" icon={<Link2 className="h-3.5 w-3.5" />} onClick={() => setDialog("share")}>
             {data.shareLink ? "Link is on" : "Share link"}
@@ -307,11 +307,11 @@ export function ProjectView({ nav, projectId, tab, taskId }: { nav: VaNav; proje
         <div className="mt-4 grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
           <div className={cx("space-y-4", selected && "hidden lg:block")}>
             <Button size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setDialog("ticket")}>
-              New ticket for the agent
+              New ticket for the user
             </Button>
             {data.tasks.length === 0 ? (
               <Card>
-                <Empty title="No tickets yet" body="Tickets appear when the agent assigns a suggested task or writes a new one. If the agent asks by text or email, create the ticket here." />
+                <Empty title="No tickets yet" body="Tickets appear when the user assigns a suggested task or writes a new one. If the user asks by text or email, create the ticket here." />
               </Card>
             ) : null}
             {GROUPS.map((g) => {
@@ -352,11 +352,11 @@ export function ProjectView({ nav, projectId, tab, taskId }: { nav: VaNav; proje
       {current === "profile" ? (
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="space-y-4">
-            {data.lastVerified ? <p className="text-[13px] text-ink-3">Last verified {dateTime(data.lastVerified.at, tz)} by {data.lastVerified.by}. This is what the agent sees.</p> : null}
+            {data.lastVerified ? <p className="text-[13px] text-ink-3">Last verified {dateTime(data.lastVerified.at, tz)} by {data.lastVerified.by}. This is what the user sees.</p> : null}
             {data.needsInput.length ? (
               <section className="rounded-xl border border-[#edd9a8] bg-warn-soft px-4 pt-3">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-warn">Needs agent input ({data.needsInput.length})</h3>
-                <p className="mt-1 text-[13px] text-ink-2">The transcript did not settle these, so the agent cannot see them. Ask the agent, then mark each one resolved, or add the confirmed fact from the next conversation.</p>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-warn">Needs user input ({data.needsInput.length})</h3>
+                <p className="mt-1 text-[13px] text-ink-2">The transcript did not settle these, so the user cannot see them. Ask the user, then mark each one resolved, or add the confirmed fact from the next conversation.</p>
                 <div className="divide-y divide-[#edd9a8]">
                   {data.needsInput.map((f) => (
                     <FactRow
@@ -408,7 +408,7 @@ export function ProjectView({ nav, projectId, tab, taskId }: { nav: VaNav; proje
       {current === "documents" ? (
         <Card className="mt-4 p-4">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-[13px] text-ink-3">Files the agent or you added for this client, such as disclosures or a buyer questionnaire.</p>
+            <p className="text-[13px] text-ink-3">Files the user or you added for this client, such as disclosures or a buyer questionnaire.</p>
             <AddFile projectId={projectId} kind="project" allowLink onAdded={() => reload(true)} />
           </div>
           <div className="mt-3 space-y-2">
@@ -421,7 +421,7 @@ export function ProjectView({ nav, projectId, tab, taskId }: { nav: VaNav; proje
         <div className="mt-4 space-y-3">
           {delivered.length === 0 ? (
             <Card>
-              <Empty title="Nothing delivered yet" body="Delivered tickets and their files are listed here with the agent's feedback." />
+              <Empty title="Nothing delivered yet" body="Delivered tickets and their files are listed here with the user's feedback." />
             </Card>
           ) : null}
           {delivered.map((t) => (

@@ -128,7 +128,7 @@ export const TASK_STATUS_LABEL: Record<string, string> = {
   suggested: "Suggested",
   received: "Received",
   in_progress: "In progress",
-  waiting: "Waiting on agent",
+  waiting: "Waiting on user",
   delivered: "Delivered",
   cancelled: "Cancelled",
   dismissed: "Dismissed",

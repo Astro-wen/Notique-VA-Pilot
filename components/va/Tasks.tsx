@@ -40,7 +40,7 @@ export function TasksView({ nav }: { nav: VaNav }) {
       <div className="mt-4 space-y-1.5">
         {rows.length === 0 ? (
           <Card>
-            <Empty icon={<ClipboardList className="h-5 w-5" />} title={filter === "open" ? "No open tickets" : "Nothing here"} body={filter === "open" ? "When the agent assigns a task it appears here." : undefined} />
+            <Empty icon={<ClipboardList className="h-5 w-5" />} title={filter === "open" ? "No open tickets" : "Nothing here"} body={filter === "open" ? "When the user assigns a task it appears here." : undefined} />
           </Card>
         ) : (
           rows.map((t) => <TicketRow key={t.id} task={t} tz={nav.agent.timezone} showProject onClick={() => nav.go("project", { id: t.project_id, tab: "tickets", task: t.id })} />)

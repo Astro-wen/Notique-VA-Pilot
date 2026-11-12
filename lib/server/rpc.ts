@@ -93,11 +93,11 @@ function optStr(v: unknown, max = 500): string | null {
 async function assertAgentAccess(p: Profile, agentId: string): Promise<void> {
   if (p.role === "admin") return;
   if (p.role === "agent") {
-    if (p.id !== agentId) throw new RpcError("You do not have access to this agent.", 403);
+    if (p.id !== agentId) throw new RpcError("You do not have access to this user.", 403);
     return;
   }
   const rows = q(await db().from("assignments").select("agent_id").eq("va_id", p.id).eq("agent_id", agentId));
-  if (!rows || (rows as any[]).length === 0) throw new RpcError("This agent is not assigned to you.", 403);
+  if (!rows || (rows as any[]).length === 0) throw new RpcError("This user is not assigned to you.", 403);
 }
 
 async function loadProject(p: Profile, projectId: unknown): Promise<Project> {
@@ -878,7 +878,7 @@ export const handlers: Record<string, Handler> = {
     await assertAgentAccess(p, agentId);
     const agents = await agentSummaries(p);
     const agent = agents.find((a) => a.id === agentId);
-    if (!agent) throw new RpcError("Agent not found.", 404);
+    if (!agent) throw new RpcError("User not found.", 404);
 
     const rows = (q(
       await db().from("events").select("*").eq("agent_id", agentId).in("status", ["processing", "extracting", "ready", "in_review", "failed", "escalated"]).order("due_at", { ascending: true }),
@@ -1206,8 +1206,8 @@ export const handlers: Record<string, Handler> = {
     const p = me(ctx);
     const project = await loadProject(p, args.project_id);
     const staffUser = isStaff(p);
-    const via = staffUser ? str(args.requested_via, "How the agent asked for this", 20) : "in_app";
-    if (!["in_app", "text", "email", "call"].includes(via)) throw new RpcError("Choose how the agent asked for this.");
+    const via = staffUser ? str(args.requested_via, "How the user asked for this", 20) : "in_app";
+    if (!["in_app", "text", "email", "call"].includes(via)) throw new RpcError("Choose how the user asked for this.");
     const row = q(
       await db()
         .from("tasks")
@@ -1248,7 +1248,7 @@ export const handlers: Record<string, Handler> = {
     const p = me(ctx);
     const task = await loadTask(p, args.task_id);
     if (task.status !== "suggested") throw new RpcError("This task has already been handled.");
-    const via = isStaff(p) ? str(args.requested_via, "How the agent approved this", 20) : "in_app";
+    const via = isStaff(p) ? str(args.requested_via, "How the user approved this", 20) : "in_app";
     const row = q(
       await db().from("tasks").update({ status: "received", assigned_at: new Date().toISOString(), requested_via: via }).eq("id", task.id).eq("status", "suggested").select("*").single(),
     ) as Task;
@@ -1274,7 +1274,7 @@ export const handlers: Record<string, Handler> = {
     const task = await loadTask(p, args.task_id);
     if (["delivered", "cancelled", "dismissed"].includes(task.status)) throw new RpcError("This task is already closed.");
     q(await db().from("tasks").update({ status: "cancelled", ...pauseTimerPatch(task) }).eq("id", task.id).select("id"));
-    await systemMessage(task.id, `${p.role === "agent" ? "The agent" : p.name} cancelled this task.`);
+    await systemMessage(task.id, `${p.role === "agent" ? "The user" : p.name} cancelled this task.`);
     await audit(p, "task.cancel", "task", task.id);
     return { ok: true };
   },
@@ -1317,7 +1317,7 @@ export const handlers: Record<string, Handler> = {
     const onBehalf = staffUser && args.as_agent === true;
     const channel = onBehalf ? str(args.channel, "Channel", 10) : staffUser && typeof args.channel === "string" ? args.channel : "in_app";
     if (!["in_app", "text", "email", "call"].includes(channel)) throw new RpcError("Choose a channel.");
-    if (onBehalf && channel === "in_app") throw new RpcError("Choose where the agent replied: text, email, or call.");
+    if (onBehalf && channel === "in_app") throw new RpcError("Choose where the user replied: text, email, or call.");
     const senderRole = !staffUser || onBehalf ? "agent" : "va";
     const row = q(
       await db().from("task_messages").insert({ task_id: task.id, sender_id: onBehalf ? null : p.id, sender_role: senderRole, channel, body }).select("*").single(),
@@ -1359,7 +1359,7 @@ export const handlers: Record<string, Handler> = {
     }
     const row = q(await db().from("tasks").update(patch).eq("id", task.id).select("*").single()) as Task;
     if (feedback === "revision_requested") {
-      await systemMessage(task.id, "The agent asked for a revision.");
+      await systemMessage(task.id, "The user asked for a revision.");
       const note = optStr(args.note, 2000);
       if (note) {
         await db().from("task_messages").insert({ task_id: task.id, sender_id: p.role === "agent" ? p.id : null, sender_role: "agent", channel: p.role === "agent" ? "in_app" : "text", body: note });

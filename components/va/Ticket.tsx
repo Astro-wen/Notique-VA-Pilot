@@ -28,8 +28,8 @@ export function NewTicketDialog({ open, onClose, projectId, onCreated }: { open:
     }
   }, [open]);
   async function save() {
-    if (!title.trim() || !description.trim()) return toast("Add a title and what the agent asked for.", { tone: "error" });
-    if (!via) return toast("Choose how the agent asked for this.", { tone: "error" });
+    if (!title.trim() || !description.trim()) return toast("Add a title and what the user asked for.", { tone: "error" });
+    if (!via) return toast("Choose how the user asked for this.", { tone: "error" });
     setBusy(true);
     try {
       onCreated(await rpc<Task>("createTask", { project_id: projectId, title, description, category, requested_via: via }));
@@ -44,7 +44,7 @@ export function NewTicketDialog({ open, onClose, projectId, onCreated }: { open:
     <Modal
       open={open}
       onClose={onClose}
-      title="New ticket for the agent"
+      title="New ticket for the user"
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -54,12 +54,12 @@ export function NewTicketDialog({ open, onClose, projectId, onCreated }: { open:
         </>
       }
     >
-      <p className="text-[13px] text-ink-3">Only log work the agent actually asked for. The agent sees this ticket in their Tasks.</p>
+      <p className="text-[13px] text-ink-3">Only log work the user actually asked for. The user sees this ticket in their Tasks.</p>
       <div className="mt-4 space-y-4">
         <Field label="Title">
           <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} placeholder="Shortlist 3 bed homes near Lincoln Elementary" />
         </Field>
-        <Field label="What the agent asked for">
+        <Field label="What the user asked for">
           <Textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
@@ -148,16 +148,16 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
 
       {task.status === "suggested" ? (
         <div className="rounded-lg bg-page p-3 text-[13px] text-ink-2">
-          <p>The agent has not assigned this yet. Do not start work.</p>
+          <p>The user has not assigned this yet. Do not start work.</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span>If the agent approved it outside the app:</span>
-            <Select aria-label="How the agent approved" className="!h-8 !w-auto" value={assignVia} onChange={(e) => setAssignVia(e.target.value)}>
+            <span>If the user approved it outside the app:</span>
+            <Select aria-label="How the user approved" className="!h-8 !w-auto" value={assignVia} onChange={(e) => setAssignVia(e.target.value)}>
               <option value="text">by text</option>
               <option value="email">by email</option>
               <option value="call">on a call</option>
             </Select>
             <Button size="sm" busy={busy === "assign"} onClick={() => run("assign", "assignTask", { requested_via: assignVia }, "Ticket assigned.")}>
-              Assign for the agent
+              Assign for the user
             </Button>
           </div>
         </div>
@@ -172,7 +172,7 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
               ))}
             </Select>
           </Field>
-          <Field label={`ETA (${tzAbbr(Intl.DateTimeFormat().resolvedOptions().timeZone)}, your time)`} hint={task.eta ? `Agent sees ${dateTime(task.eta, tz, true)}${etaLeft ? `, ${etaLeft.text.toLowerCase()}` : ""}` : "Set this first. The agent sees it right away."}>
+          <Field label={`ETA (${tzAbbr(Intl.DateTimeFormat().resolvedOptions().timeZone)}, your time)`} hint={task.eta ? `User sees ${dateTime(task.eta, tz, true)}${etaLeft ? `, ${etaLeft.text.toLowerCase()}` : ""}` : "Set this first. The user sees it right away."}>
             <div className="flex gap-2" data-tour="ticket-eta">
               <Input className="min-w-0" type="datetime-local" value={eta} min={toLocalInput(null)} onChange={(e) => setEta(e.target.value)} />
               <Button className="!h-9 shrink-0" variant={task.eta ? "outline" : "primary"} disabled={!eta || (!!task.eta && toLocalInput(task.eta) === eta)} busy={busy === "eta"} onClick={() => run("eta", "setTaskEta", { eta: new Date(eta).toISOString() }, "ETA saved.")}>
@@ -221,7 +221,7 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
       ) : null}
 
       <div>
-        <h3 className={label}>Files from the agent</h3>
+        <h3 className={label}>Files from the user</h3>
         <div className="mt-2 space-y-2">
           {attachments.length === 0 ? <p className="text-[13px] text-ink-3">None attached.</p> : attachments.map((f) => <FileItem key={f.id} file={f} />)}
         </div>
@@ -230,7 +230,7 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
       <div data-tour="ticket-deliverables">
         <h3 className={label}>Deliverables</h3>
         <div className="mt-2 space-y-2">
-          {deliverables.length === 0 ? <p className="text-[13px] text-ink-3">{open ? "Upload the file or paste a link to the document. The agent sees it only after you mark the ticket delivered." : "None."}</p> : null}
+          {deliverables.length === 0 ? <p className="text-[13px] text-ink-3">{open ? "Upload the file or paste a link to the document. The user sees it only after you mark the ticket delivered." : "None."}</p> : null}
           {deliverables.map((f) => (
             <FileItem key={f.id} file={f} canDelete={f.status === "draft"} onDeleted={() => reload(true)} />
           ))}
@@ -240,8 +240,8 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
 
       {task.status === "delivered" ? (
         <div className="rounded-xl border border-line p-4">
-          <h3 className={label}>Agent feedback</h3>
-          {task.agent_feedback ? <p className="mt-2 text-sm font-medium">{FEEDBACK_LABEL[task.agent_feedback]}</p> : <p className="mt-2 text-[13px] text-ink-3">Not recorded yet. If the agent told you outside the app, record it here.</p>}
+          <h3 className={label}>User feedback</h3>
+          {task.agent_feedback ? <p className="mt-2 text-sm font-medium">{FEEDBACK_LABEL[task.agent_feedback]}</p> : <p className="mt-2 text-[13px] text-ink-3">Not recorded yet. If the user told you outside the app, record it here.</p>}
           <div className="mt-3 flex flex-wrap gap-2">
             {(["used_as_is", "edited", "not_used", "revision_requested"] as const).map((f) => (
               <Button key={f} size="sm" variant={task.agent_feedback === f ? "primary" : "outline"} busy={busy === f} onClick={() => run(f, "setTaskFeedback", { feedback: f }, f === "revision_requested" ? "Reopened for revision." : "Feedback recorded.")}>
@@ -261,7 +261,7 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
             viewer="va"
             otherName={nav.agent.name.split(" ")[0]}
             canAsk={task.status === "in_progress"}
-            disabled={task.status === "suggested" ? "Messaging opens once the agent assigns this task." : task.status === "cancelled" ? "This ticket was cancelled." : null}
+            disabled={task.status === "suggested" ? "Messaging opens once the user assigns this task." : task.status === "cancelled" ? "This ticket was cancelled." : null}
             onSent={() => {
               reload(true);
               onChanged();
@@ -284,7 +284,7 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
       <Modal
         open={confirm !== null}
         onClose={() => setConfirm(null)}
-        title={confirm === "deliver" ? "Deliver to the agent?" : "Cancel this ticket?"}
+        title={confirm === "deliver" ? "Deliver to the user?" : "Cancel this ticket?"}
         footer={
           <>
             <Button onClick={() => setConfirm(null)}>Go back</Button>
@@ -303,7 +303,7 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
         <p className="text-sm text-ink-2">
           {confirm === "deliver"
             ? `${nav.agent.name} will see ${deliverables.length} ${deliverables.length === 1 ? "file" : "files"} and the timer stops at ${clock(logged)}. Check that nothing in the files is addressed to the client as if already sent.`
-            : "The agent sees it as cancelled. Use this only if the agent no longer needs it."}
+            : "The user sees it as cancelled. Use this only if the user no longer needs it."}
         </p>
       </Modal>
     </div>

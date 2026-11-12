@@ -15,7 +15,7 @@ const CHECKS: { key: keyof EventChecks; label: string; help: string }[] = [
   { key: "type_match", label: "Matches the project", help: "This conversation is about this client and this deal." },
 ];
 
-const VERDICT_LABEL: Record<Verdict, string> = { pending: "To decide", approved: "Approved", edited: "Edited", declined: "Declined", insufficient: "Needs agent input" };
+const VERDICT_LABEL: Record<Verdict, string> = { pending: "To decide", approved: "Approved", edited: "Edited", declined: "Declined", insufficient: "Needs user input" };
 const VERDICT_TONE: Record<Verdict, "neutral" | "ok" | "accent" | "bad" | "warn"> = { pending: "neutral", approved: "ok", edited: "accent", declined: "bad", insufficient: "warn" };
 
 function confidenceLabel(c: number | null): { text: string; tone: "ok" | "warn" | "bad" } | null {
@@ -156,7 +156,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
   async function decide(fact: Fact, verdict: Verdict, extra: Record<string, unknown> = {}) {
     if (readOnly) return;
     if (verdict === "approved" && fact.origin === "ai" && fact.confidence !== null && fact.confidence < 0.6) {
-      toast("Low confidence. Edit the wording to confirm it, decline it, or mark it as needing agent input.", { tone: "error" });
+      toast("Low confidence. Edit the wording to confirm it, decline it, or mark it as needing user input.", { tone: "error" });
       return;
     }
     const before = fact;
@@ -261,7 +261,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
     setBusy(true);
     try {
       const res = await rpc<{ suggested_tasks: number; accepted: number }>("submitEvent", { event_id: eventId });
-      toast(`Submitted. ${res.accepted} ${res.accepted === 1 ? "fact" : "facts"} published${res.suggested_tasks ? `, ${res.suggested_tasks} ${res.suggested_tasks === 1 ? "task" : "tasks"} suggested to the agent` : ""}.`);
+      toast(`Submitted. ${res.accepted} ${res.accepted === 1 ? "fact" : "facts"} published${res.suggested_tasks ? `, ${res.suggested_tasks} ${res.suggested_tasks === 1 ? "task" : "tasks"} suggested to the user` : ""}.`);
       nav.refreshCounts();
       nav.go("queue");
     } catch (err) {
@@ -277,7 +277,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
     setBusy(true);
     try {
       await rpc("escalateEvent", { event_id: eventId, note: escalate });
-      toast("Escalated. It stays out of the agent's view until someone returns it to the queue.");
+      toast("Escalated. It stays out of the user's view until someone returns it to the queue.");
       nav.refreshCounts();
       nav.go("queue");
     } catch (err) {
@@ -399,7 +399,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
         {event.status === "submitted" ? (
           <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-ok-soft px-3 py-2 text-[13px] text-ok">
             <Check className="h-4 w-4" />
-            <span className="flex-1">Submitted {dateTime(event.submitted_at, tz)}. The agent can see the approved facts.</span>
+            <span className="flex-1">Submitted {dateTime(event.submitted_at, tz)}. The user can see the approved facts.</span>
             {detail.canReopen ? (
               <Button size="sm" busy={busy} onClick={reopen}>
                 Reopen to edit
@@ -617,7 +617,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                                 <div className="rounded-lg bg-page p-3">
                                   <label className="flex items-center gap-2 text-[13px] font-medium">
                                     <input type="checkbox" className="h-4 w-4 accent-[#0d0d0d]" checked={draft.withTask} onChange={(e) => setDraft({ ...draft, withTask: e.target.checked })} />
-                                    Suggest a task to the agent
+                                    Suggest a task to the user
                                   </label>
                                   {draft.withTask ? (
                                     <div className="mt-2 space-y-2">
@@ -697,7 +697,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                                     <Button size="sm" icon={<X className="h-3.5 w-3.5" />} onClick={() => decide(f, "declined")} title="The AI got this wrong. It is discarded.">
                                       Decline {focused ? <Kbd>D</Kbd> : null}
                                     </Button>
-                                    <Button size="sm" icon={<CircleHelp className="h-3.5 w-3.5" />} onClick={() => decide(f, "insufficient")} title="The transcript does not settle this. It is held for the agent to confirm.">
+                                    <Button size="sm" icon={<CircleHelp className="h-3.5 w-3.5" />} onClick={() => decide(f, "insufficient")} title="The transcript does not settle this. It is held for the user to confirm.">
                                       Insufficient {focused ? <Kbd>I</Kbd> : null}
                                     </Button>
                                   </div>
@@ -740,7 +740,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
           <>
             <Button onClick={() => setConfirm(false)}>Keep reviewing</Button>
             <Button variant="primary" busy={busy} onClick={submit}>
-              Submit to agent
+              Submit to user
             </Button>
           </>
         }
@@ -751,8 +751,8 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
             ["Published as written", counts.approved],
             ["Published with your edits", counts.edited],
             ["Declined and discarded", counts.declined],
-            ["Held for agent input", counts.insufficient],
-            ["Tasks suggested to the agent", counts.tasks],
+            ["Held for user input", counts.insufficient],
+            ["Tasks suggested to the user", counts.tasks],
           ].map(([label, value]) => (
             <div key={label as string} className="flex justify-between px-3 py-2">
               <dt className="text-ink-2">{label}</dt>
@@ -776,7 +776,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
           </>
         }
       >
-        <p className="text-sm text-ink-2">Use this when the event should not be verified as it is. Nothing from it reaches the agent.</p>
+        <p className="text-sm text-ink-2">Use this when the event should not be verified as it is. Nothing from it reaches the user.</p>
         <div className="mt-3 flex flex-wrap gap-2">
           {["No recording consent heard", "Wrong project or client", "Audio too poor to verify", "Contains sensitive personal data"].map((r) => (
             <button key={r} onClick={() => setEscalate(r)} className="h-8 rounded-full border border-line px-3 text-[13px] hover:bg-page">
@@ -796,7 +796,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
             ["A", "Approve"],
             ["E", "Edit, then save with Ctrl or Cmd and Enter"],
             ["D", "Decline: the AI got it wrong"],
-            ["I", "Insufficient: hold for the agent to confirm"],
+            ["I", "Insufficient: hold for the user to confirm"],
             ["U", "Undo the decision"],
             ["Enter", "Show the first quote in the transcript"],
             ["/", "Search the transcript"],

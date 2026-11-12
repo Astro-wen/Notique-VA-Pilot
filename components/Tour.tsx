@@ -18,8 +18,8 @@ export const TOUR_STEPS: Record<Role, Step[]> = {
     {
       icon: <Inbox className="h-6 w-6" />,
       title: "Your queue is the starting point",
-      body: "Every conversation an agent records or uploads lands in Queue, sorted by what is due first.",
-      points: ["Pick the agent you are serving at the top of the screen", "Missing a source? Add it yourself under Data sources"],
+      body: "Every conversation a user records or uploads lands in Queue, sorted by what is due first.",
+      points: ["Pick the user you are serving at the top of the screen", "Missing a source? Add it yourself under Data sources"],
     },
     {
       icon: <ShieldCheck className="h-6 w-6" />,
@@ -30,32 +30,32 @@ export const TOUR_STEPS: Record<Role, Step[]> = {
     {
       icon: <CheckCircle2 className="h-6 w-6" />,
       title: "Submit when all four checks pass",
-      body: "Consent heard, personal data masked, fair housing safe, and type matches the project. The agent only sees what you approved.",
+      body: "Consent heard, personal data masked, fair housing safe, and type matches the project. The user only sees what you approved.",
       points: ["No consent on the recording? Escalate instead of submitting", "You can reopen a submitted event for 24 hours"],
     },
     {
       icon: <ClipboardList className="h-6 w-6" />,
-      title: "Tickets are tasks the agent assigned to you",
-      body: "Set an ETA first so the agent knows when to expect it. Run the timer while you work, attach the deliverable, then mark it delivered.",
-      points: ["Blocked? Ask agent and pause stops the clock until they answer", "If the agent replies by text or email, log the reply on the ticket"],
+      title: "Tickets are tasks the user assigned to you",
+      body: "Set an ETA first so the user knows when to expect it. Run the timer while you work, attach the deliverable, then mark it delivered.",
+      points: ["Blocked? Ask user and pause stops the clock until they answer", "If the user replies by text or email, log the reply on the ticket"],
     },
     {
       icon: <Users className="h-6 w-6" />,
       title: "Two rules that never bend",
-      body: "You never contact the agent's clients or any third party. Everything you prepare goes to the agent, who decides what to send.",
+      body: "You never contact the user's clients or any third party. Everything you prepare goes to the user, who decides what to send.",
     },
   ],
   admin: [
     {
       icon: <Users className="h-6 w-6" />,
       title: "Start by adding people",
-      body: "Open Admin to create accounts for VAs and agents, then tick which agents each VA serves.",
+      body: "Open Admin to create accounts for VAs and users, then tick which users each VA serves.",
       points: ["Each person gets their own login", "You can reset a password at any time"],
     },
     {
       icon: <Inbox className="h-6 w-6" />,
       title: "You can work as a VA too",
-      body: "Admins see every agent in the VA Console and can verify events and handle tickets.",
+      body: "Admins see every user in the VA Console and can verify events and handle tickets.",
     },
   ],
   agent: [

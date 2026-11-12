@@ -75,7 +75,7 @@ export function Qc({ nav }: { nav: VaNav }) {
               ) : null}
             </Card>
             <Card className="space-y-3 p-4">
-              <h2 className="text-[15px] font-semibold">Agent feedback on deliverables</h2>
+              <h2 className="text-[15px] font-semibold">User feedback on deliverables</h2>
               {fbTotal === 0 ? <p className="text-[13px] text-ink-3">No delivered tickets in this period.</p> : null}
               {fbTotal > 0 ? (
                 <>

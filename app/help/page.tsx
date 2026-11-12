@@ -7,12 +7,12 @@ import { Button, Card, Logo } from "@/components/ui";
 
 const FAQ: Record<"va" | "agent", [string, string][]> = {
   va: [
-    ["What is the difference between Decline and Insufficient?", "Decline means the AI got it wrong, so the item is thrown away. Insufficient means it might be true but the transcript does not prove it. Those are held under Needs agent input on the project and the agent never sees them as facts."],
+    ["What is the difference between Decline and Insufficient?", "Decline means the AI got it wrong, so the item is thrown away. Insufficient means it might be true but the transcript does not prove it. Those are held under Needs user input on the project and the user never sees them as facts."],
     ["Why can I not approve a low confidence item?", "Items under 60% must be edited, declined, or marked insufficient. Rewording it yourself confirms you checked it against the quote."],
-    ["The recording has no consent notice. What now?", "Do not submit. Choose Escalate and pick No recording consent heard. Nothing from the event reaches the agent."],
-    ["The agent answered me by text instead of in the app.", "Open the ticket, switch the message box to Log agent reply, pick the channel, and paste what they said. The ticket leaves Waiting on agent on its own."],
-    ["When is an event due?", "9:00 AM on the next business day in the agent's time zone. The queue sorts by that deadline."],
-    ["Can I contact the agent's client or a lender?", "No. You research and draft. The agent decides what goes out and sends it."],
+    ["The recording has no consent notice. What now?", "Do not submit. Choose Escalate and pick No recording consent heard. Nothing from the event reaches the user."],
+    ["The user answered me by text instead of in the app.", "Open the ticket, switch the message box to Log user reply, pick the channel, and paste what they said. The ticket leaves Waiting on user on its own."],
+    ["When is an event due?", "9:00 AM on the next business day in the user's time zone. The queue sorts by that deadline."],
+    ["Can I contact the user's client or a lender?", "No. You research and draft. The user decides what goes out and sends it."],
   ],
   agent: [
     ["What can I upload?", "A meeting or call recording, a transcript file, screenshots of a text thread, or a note you type after a meeting. Each one goes into a client's project."],

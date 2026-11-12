@@ -205,7 +205,7 @@ export function TaskCard({ taskId, vaName, tz, preview, onClose, onChanged }: { 
                 taskId={task.id}
                 messages={data!.messages}
                 viewer={preview ? "va" : "agent"}
-                otherName={preview ? "Agent" : vaName}
+                otherName={preview ? "User" : vaName}
                 disabled={preview ? "Preview only. Messages are sent from the ticket." : task.status === "suggested" ? "Assign this task to start a conversation." : task.status === "cancelled" ? "This task was cancelled." : null}
                 onSent={() => {
                   reload(true);

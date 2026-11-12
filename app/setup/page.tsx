@@ -57,7 +57,7 @@ export default function SetupPage() {
             </div>
           ) : (
             <>
-              <p className="mt-1 text-[13px] text-ink-3">Create the first admin account. You will add VAs and agents on the next screen.</p>
+              <p className="mt-1 text-[13px] text-ink-3">Create the first admin account. You will add VAs and users on the next screen.</p>
               <form onSubmit={submit} className="mt-5 space-y-4">
                 <Field label="Your name">
                   <Input required value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />

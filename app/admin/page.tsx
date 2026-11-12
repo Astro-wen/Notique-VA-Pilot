@@ -10,7 +10,7 @@ import { Coach, TOURS } from "@/components/Coach";
 import { Badge, Button, Card, Empty, ErrorNote, Field, Input, Logo, Modal, Select, Spinner, useLoad, useToast } from "@/components/ui";
 
 const ZONES = ["America/Los_Angeles", "America/Denver", "America/Phoenix", "America/Chicago", "America/New_York", "Pacific/Honolulu", "America/Anchorage", "Asia/Taipei", "Asia/Manila"];
-const ROLE_LABEL = { admin: "Admin", va: "VA", agent: "Agent" } as const;
+const ROLE_LABEL = { admin: "Admin", va: "VA", agent: "User" } as const;
 
 function AdminPage() {
   const toast = useToast();
@@ -83,7 +83,7 @@ function AdminPage() {
         <div className="flex items-end justify-between gap-3">
           <div>
             <h1 className="text-xl font-semibold">People</h1>
-            <p className="mt-0.5 text-[13px] text-ink-3">Create accounts, then choose which agents each VA serves.</p>
+            <p className="mt-0.5 text-[13px] text-ink-3">Create accounts, then choose which users each VA serves.</p>
           </div>
           <Button data-tour="admin-add" variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => setCreate(true)}>
             Add person
@@ -112,10 +112,10 @@ function AdminPage() {
             </Card>
 
             <h2 data-tour="admin-matrix" className="mt-8 w-fit text-[15px] font-semibold">Who serves whom</h2>
-            <p className="mt-0.5 text-[13px] text-ink-3">A VA only sees the agents ticked here. Admins see every agent.</p>
+            <p className="mt-0.5 text-[13px] text-ink-3">A VA only sees the users ticked here. Admins see every user.</p>
             {vas.length === 0 || agents.length === 0 ? (
               <Card className="mt-3">
-                <Empty title="Add at least one VA and one agent" body="Once both exist you can match them here." />
+                <Empty title="Add at least one VA and one user" body="Once both exist you can match them here." />
               </Card>
             ) : (
               <Card className="mt-3 overflow-x-auto">
@@ -171,7 +171,7 @@ function AdminPage() {
             </Field>
             <Field label="Role">
               <Select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                <option value="agent">Agent</option>
+                <option value="agent">User</option>
                 <option value="va">VA</option>
                 <option value="admin">Admin</option>
               </Select>

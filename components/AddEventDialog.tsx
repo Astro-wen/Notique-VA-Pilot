@@ -212,7 +212,7 @@ export function AddEventDialog({ open, onClose, projects, agentId, defaultProjec
         {kind === "audio" ? (
           <label className="flex items-center gap-2 text-[13px] text-ink-2">
             <input type="checkbox" className="h-4 w-4 accent-[#0d0d0d]" checked={memo} onChange={(e) => setMemo(e.target.checked)} />
-            This is the agent talking alone after the meeting (voice memo)
+            This is the user talking alone after the meeting (voice memo)
           </label>
         ) : files.length === 0 ? (
           <Field label={kind === "note" ? "Note" : "Or paste the text"}>

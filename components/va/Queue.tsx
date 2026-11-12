@@ -156,7 +156,7 @@ export function Queue({ nav }: { nav: VaNav }) {
           <Empty
             icon={<Clock className="h-5 w-5" />}
             title="Nothing to verify right now"
-            body={data.processing.some((e) => e.status === "processing" || e.status === "extracting") ? "New uploads are still being prepared. They will appear here on their own." : "When the agent records or uploads a conversation it appears here. You can also add one yourself."}
+            body={data.processing.some((e) => e.status === "processing" || e.status === "extracting") ? "New uploads are still being prepared. They will appear here on their own." : "When the user records or uploads a conversation it appears here. You can also add one yourself."}
             action={<Button onClick={() => setAdd("audio")}>Add conversation</Button>}
           />
         ) : (
@@ -256,7 +256,7 @@ export function Queue({ nav }: { nav: VaNav }) {
 
 const SOURCE_CARDS: { kind: AddKind | null; keys: string[]; title: string; mode: string; body: string; icon: React.ReactNode }[] = [
   { kind: "audio", keys: ["recording"], title: "Meeting or call recording", mode: "Upload", body: "Audio or video. Transcribed with speaker labels, usually in a few minutes.", icon: <FileAudio className="h-5 w-5" /> },
-  { kind: "audio", keys: ["voice_memo"], title: "Voice memo or debrief", mode: "Upload", body: "The agent talking alone after a meeting. Tick the voice memo box when you upload.", icon: <Mic className="h-5 w-5" /> },
+  { kind: "audio", keys: ["voice_memo"], title: "Voice memo or debrief", mode: "Upload", body: "The user talking alone after a meeting. Tick the voice memo box when you upload.", icon: <Mic className="h-5 w-5" /> },
   { kind: "transcript", keys: ["transcript_upload"], title: "Transcript", mode: "Upload", body: "A .vtt, .txt, or .docx export from Zoom, Meet, or another recorder.", icon: <FileText className="h-5 w-5" /> },
   { kind: "texts", keys: ["text_upload"], title: "Text messages", mode: "Upload", body: "Screenshots of a thread or the pasted messages.", icon: <MessageSquareText className="h-5 w-5" /> },
   { kind: "note", keys: ["note", "crm"], title: "Written note or CRM note", mode: "Paste", body: "Copy a note out of Follow Up Boss or type a recap.", icon: <NotebookPen className="h-5 w-5" /> },

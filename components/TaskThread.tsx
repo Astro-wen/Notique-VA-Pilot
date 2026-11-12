@@ -16,7 +16,7 @@ interface Props {
   onSent: () => void;
 }
 
-/** Conversation between the agent and the VA on one task. */
+/** Conversation between the user and the VA on one task. */
 export function TaskThread({ taskId, messages, viewer, otherName, disabled, canAsk, onSent }: Props) {
   const toast = useToast();
   const [body, setBody] = useState("");
@@ -86,12 +86,12 @@ export function TaskThread({ taskId, messages, viewer, otherName, disabled, canA
               <div className="inline-flex rounded-md border border-line p-0.5">
                 {(["send", "log"] as const).map((key) => (
                   <button key={key} onClick={() => setMode(key)} className={cx("h-7 rounded px-2.5", mode === key ? "bg-ink text-white" : "text-ink-2")}>
-                    {key === "send" ? `Message ${otherName}` : "Log agent reply"}
+                    {key === "send" ? `Message ${otherName}` : "Log user reply"}
                   </button>
                 ))}
               </div>
               {mode === "log" ? (
-                <Select aria-label="Where the agent replied" className="!h-8 !w-auto" value={channel} onChange={(e) => setChannel(e.target.value)}>
+                <Select aria-label="Where the user replied" className="!h-8 !w-auto" value={channel} onChange={(e) => setChannel(e.target.value)}>
                   <option value="text">Replied by text</option>
                   <option value="email">Replied by email</option>
                   <option value="call">Replied on a call</option>
@@ -103,15 +103,15 @@ export function TaskThread({ taskId, messages, viewer, otherName, disabled, canA
             rows={2}
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder={viewer === "va" ? (mode === "log" ? "Paste or summarise what the agent said" : "Write to the agent") : `Message ${otherName}`}
+            placeholder={viewer === "va" ? (mode === "log" ? "Paste or summarise what the user said" : "Write to the user") : `Message ${otherName}`}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send(false);
             }}
           />
           <div className="mt-2 flex items-center justify-end gap-2">
             {viewer === "va" && mode === "send" && canAsk ? (
-              <Button size="sm" onClick={() => send(true)} disabled={!body.trim() || busy} title="Sends the message, pauses the timer, and marks the ticket as waiting on the agent">
-                Ask agent and pause
+              <Button size="sm" onClick={() => send(true)} disabled={!body.trim() || busy} title="Sends the message, pauses the timer, and marks the ticket as waiting on the user">
+                Ask user and pause
               </Button>
             ) : null}
             <Button size="sm" variant={viewer === "agent" ? "primary" : "outline"} icon={<Send className="h-3.5 w-3.5" />} onClick={() => send(false)} disabled={!body.trim()} busy={busy}>

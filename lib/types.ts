@@ -235,7 +235,7 @@ export interface AgentSummary {
 
 export interface MeResult {
   profile: Profile;
-  /** For VAs and admins: agents they can serve. Empty for agents. */
+  /** For VAs and admins: users they can serve. Empty for users. */
   agents: AgentSummary[];
 }
 
@@ -273,7 +273,7 @@ export interface ProjectDetail {
   events: EventRow[];
   /** Approved or edited facts only. */
   facts: Fact[];
-  /** Insufficient facts. Empty in agent views. */
+  /** Insufficient facts. Empty in user views. */
   needsInput: Fact[];
   tasks: Task[];
   files: FileRow[];
