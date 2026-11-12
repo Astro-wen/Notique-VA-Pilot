@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, Clock, FileAudio, FileText, Loader2, MessageSquareText, Mic, NotebookPen, Plus, Trash2 } from "lucide-react";
 import { rpc } from "@/lib/client/api";
-import { SOURCE_LABEL, TASK_STATUS_LABEL, ago, dateTime, remaining, taskNo, tzAbbr } from "@/lib/client/format";
+import { CHANNEL_LABEL, SOURCE_LABEL, TASK_STATUS_LABEL, ago, dateTime, remaining, taskNo, tzAbbr } from "@/lib/client/format";
 import type { EventRow, QueueEvent, QueueResult } from "@/lib/types";
 import { AddEventDialog, type AddKind } from "../AddEventDialog";
 import { Badge, Button, Card, Empty, ErrorNote, IconButton, SectionTitle, Spinner, useLoad, useToast } from "../ui";
@@ -221,6 +221,7 @@ export function Queue({ nav }: { nav: VaNav }) {
           >
             Open tickets
           </SectionTitle>
+          <p className="border-b border-line px-4 py-2 text-[13px] text-ink-3">Work {nav.agent.name.split(" ")[0]} asked for and is waiting on. Each one needs an ETA, then a deliverable.</p>
           <ul className="divide-y divide-line">
             {data.ticketsDue.map((t) => (
               <li key={t.id}>
@@ -228,7 +229,9 @@ export function Queue({ nav }: { nav: VaNav }) {
                   <span className="w-14 shrink-0 font-mono text-xs text-ink-3">{taskNo(t.number)}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{t.title}</span>
-                    <span className="block truncate text-xs text-ink-3">{t.project_name}</span>
+                    <span className="block truncate text-xs text-ink-3">
+                      {t.project_name}, {t.requested_via && t.requested_via !== "in_app" ? `requested by ${nav.agent.name.split(" ")[0]} by ${CHANNEL_LABEL[t.requested_via]?.toLowerCase() ?? t.requested_via}, logged by a VA` : `assigned by ${nav.agent.name.split(" ")[0]} in the app`}
+                    </span>
                   </span>
                   <Badge tone={t.status === "waiting" ? "warn" : t.status === "received" ? "accent" : "neutral"}>{TASK_STATUS_LABEL[t.status]}</Badge>
                   <span className="hidden w-40 text-right text-xs sm:block">{t.eta ? <span className={remaining(t.eta)?.tone === "late" ? "font-semibold text-bad" : "text-ink-2"}>ETA {dateTime(t.eta, tz)}</span> : <span className="font-medium text-warn">ETA not set</span>}</span>
