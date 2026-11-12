@@ -7,6 +7,7 @@ import {
   docxToText,
   extractFacts,
   getTranscription,
+  lastModelUsed,
   parseTranscriptText,
   startTranscription,
   transcribeScreenshots,
@@ -249,6 +250,7 @@ async function runExtraction(eventId: string) {
   });
   if (rows.length) q(await db().from("facts").insert(rows).select("id"));
 
+  await audit(null, "event.extract", "event", eventId, { model: lastModelUsed, facts: rows.length });
   const speakerMap = { ...(result.speakers ?? {}), ...(event.speaker_map ?? {}) };
   q(
     await db()
@@ -602,6 +604,28 @@ export const handlers: Record<string, Handler> = {
     if (Object.keys(patch).length === 0) return { ok: true };
     q(await db().from("profiles").update(patch).eq("id", id).select("id"));
     return { ok: true };
+  },
+
+  /** Runs extraction on an existing transcript with each given model and returns the drafts side by side. Saves nothing. */
+  async adminCompareModels(ctx, args) {
+    admin(ctx);
+    const event = await loadEvent(me(ctx), args.event_id);
+    const models: string[] = Array.isArray(args.models) ? args.models.filter((m: unknown) => typeof m === "string" && /^[\w.\-:/]+$/.test(m)).slice(0, 4) : [];
+    if (models.length === 0) throw new RpcError("List one to four model ids.");
+    const project = q(await db().from("projects").select("*").eq("id", event.project_id).single()) as Project;
+    const lines = (await fetchLines(event.id)).map((l) => ({ start_ms: l.start_ms, speaker: l.speaker, text: l.text }));
+    const results = await Promise.all(
+      models.map(async (model) => {
+        const started = Date.now();
+        try {
+          const out = await extractFacts({ lines, eventTitle: event.title, eventType: event.event_type, occurredAt: event.occurred_at, project, priorFacts: [], model });
+          return { model, ms: Date.now() - started, summary: out.summary, speakers: out.speakers, facts: out.facts.map((f) => ({ section: f.section, statement: f.statement, confidence: f.confidence, lines: f.lineIdx.map((i) => i + 1), task: f.suggested_task?.title ?? null })) };
+        } catch (err) {
+          return { model, ms: Date.now() - started, error: (err as Error).message };
+        }
+      }),
+    );
+    return { lines: lines.length, results };
   },
 
   async adminDeleteUser(ctx, args) {

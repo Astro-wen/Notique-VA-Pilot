@@ -182,11 +182,14 @@ const DEFAULT_MODELS = ["google/gemini-2.5-flash", "openai/gpt-4o-mini"];
 
 type ChatContent = string | ({ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } })[];
 
-async function chatJson(messages: { role: "system" | "user"; content: ChatContent }[]): Promise<unknown> {
+/** The model that answered the most recent chatJson call in this request. */
+export let lastModelUsed: string | null = null;
+
+async function chatJson(messages: { role: "system" | "user"; content: ChatContent }[], onlyModel?: string): Promise<unknown> {
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) throw new PipelineError("AI extraction is not configured. Add OPENROUTER_API_KEY in Vercel and redeploy.");
   const configured = (process.env.OPENROUTER_MODEL ?? "").split(",").map((m) => m.trim()).filter(Boolean);
-  const models = configured.length ? configured : DEFAULT_MODELS;
+  const models = onlyModel ? [onlyModel] : configured.length ? configured : DEFAULT_MODELS;
   let lastError = "";
   // Client conversations are only sent to providers that do not keep or train on them, unless explicitly relaxed.
   const strictPrivacy = process.env.OPENROUTER_ALLOW_DATA_COLLECTION !== "1";
@@ -216,6 +219,7 @@ async function chatJson(messages: { role: "system" | "user"; content: ChatConten
     }
     const body = await res.json().catch(() => ({}));
     const content: unknown = body?.choices?.[0]?.message?.content;
+    if (typeof body?.model === "string") lastModelUsed = body.model;
     if (res.ok && typeof content === "string" && content.trim()) {
       const parsed = parseLooseJson(content);
       if (parsed !== null) return parsed;
@@ -317,6 +321,8 @@ export async function extractFacts(input: {
   occurredAt: string;
   project: { client_name: string; deal_type: string; area: string | null; budget: string | null };
   priorFacts: { id: string; section: string; statement: string }[];
+  /** Force one model with no fallback. Used to compare models. */
+  model?: string;
 }): Promise<Extraction> {
   const transcript = input.lines
     .map((l, i) => {
@@ -341,7 +347,7 @@ ${transcript}`;
   const raw = (await chatJson([
     { role: "system", content: SYSTEM_PROMPT },
     { role: "user", content: user },
-  ])) as Record<string, unknown>;
+  ], input.model)) as Record<string, unknown>;
 
   const priorIds = new Set(input.priorFacts.map((f) => f.id));
   const facts: ExtractedFact[] = [];
