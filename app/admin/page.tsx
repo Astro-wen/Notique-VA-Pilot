@@ -1,13 +1,13 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { KeyRound, Plus } from "lucide-react";
+import { KeyRound, Plus, Trash2 } from "lucide-react";
 import { rpc } from "@/lib/client/api";
 import type { AdminUser } from "@/lib/types";
 import { Authed, useSession } from "@/components/Session";
 import { UserMenu } from "@/components/UserMenu";
 import { Coach, TOURS } from "@/components/Coach";
-import { Badge, Button, Card, Empty, ErrorNote, Field, Input, Logo, Modal, Select, Spinner, useLoad, useToast } from "@/components/ui";
+import { Badge, Button, IconButton, Card, Empty, ErrorNote, Field, Input, Logo, Modal, Select, Spinner, useLoad, useToast } from "@/components/ui";
 
 const ZONES = ["America/Los_Angeles", "America/Denver", "America/Phoenix", "America/Chicago", "America/New_York", "Pacific/Honolulu", "America/Anchorage", "Asia/Taipei", "Asia/Manila"];
 const ROLE_LABEL = { admin: "Admin", va: "VA", agent: "User" } as const;
@@ -18,6 +18,7 @@ function AdminPage() {
   const { data, error, loading, reload } = useLoad(() => rpc<AdminUser[]>("adminListUsers"), []);
   const [create, setCreate] = useState(false);
   const [reset, setReset] = useState<AdminUser | null>(null);
+  const [remove, setRemove] = useState<AdminUser | null>(null);
   const [form, setForm] = useState({ name: "", email: "", role: "agent", company: "", timezone: "America/Los_Angeles", password: "" });
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -52,6 +53,21 @@ function AdminPage() {
       toast("Password changed. Share the new one with them directly.");
       setReset(null);
       setPassword("");
+    } catch (err) {
+      toast((err as Error).message, { tone: "error" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteUser() {
+    if (!remove) return;
+    setBusy(true);
+    try {
+      await rpc("adminDeleteUser", { user_id: remove.id });
+      toast(`${remove.name} was deleted.`);
+      setRemove(null);
+      reload(true);
     } catch (err) {
       toast((err as Error).message, { tone: "error" });
     } finally {
@@ -125,6 +141,13 @@ function AdminPage() {
                     <Button size="sm" icon={<KeyRound className="h-3.5 w-3.5" />} onClick={() => setReset(u)}>
                       Reset password
                     </Button>
+                    {u.id !== me?.profile.id ? (
+                      <IconButton label={`Delete ${u.name}`} onClick={() => setRemove(u)}>
+                        <Trash2 className="h-4 w-4" />
+                      </IconButton>
+                    ) : (
+                      <span className="w-8" />
+                    )}
                   </li>
                 ))}
               </ul>
@@ -215,6 +238,24 @@ function AdminPage() {
             <Input value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} autoComplete="new-password" />
           </Field>
         </div>
+      </Modal>
+
+      <Modal
+        open={!!remove}
+        onClose={() => setRemove(null)}
+        title={`Delete ${remove?.name ?? ""}?`}
+        footer={
+          <>
+            <Button onClick={() => setRemove(null)}>Keep account</Button>
+            <Button variant="danger" busy={busy} onClick={deleteUser}>
+              Delete account
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink-2">
+          {remove?.email} will no longer be able to sign in, and the account is removed for good. This cannot be undone. Accounts that own projects or have work history cannot be deleted.
+        </p>
       </Modal>
 
       <Modal

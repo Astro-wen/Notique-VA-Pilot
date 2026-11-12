@@ -595,6 +595,27 @@ export const handlers: Record<string, Handler> = {
     return { ok: true };
   },
 
+  async adminDeleteUser(ctx, args) {
+    const p = admin(ctx);
+    const id = str(args.user_id, "Account");
+    if (id === p.id) throw new RpcError("You cannot delete your own account.");
+    const target = q(await db().from("profiles").select("id,name,role").eq("id", id).maybeSingle()) as { id: string; name: string; role: string } | null;
+    if (!target) throw new RpcError("Account not found.", 404);
+    if (target.role === "agent") {
+      const owned = await db().from("projects").select("id", { count: "exact", head: true }).eq("agent_id", id);
+      if ((owned.count ?? 0) > 0) throw new RpcError(`${target.name} has ${owned.count} ${owned.count === 1 ? "project" : "projects"}. Deleting the account would delete their client data, so it is blocked. Reset the password instead to cut off access.`);
+    }
+    // People who verified events or handled tickets are referenced by that history and cannot be removed.
+    const removed = await db().from("profiles").delete().eq("id", id).select("id");
+    if (removed.error) {
+      throw new RpcError(`${target.name} has work history in the system (verified events, tickets, or files), so the account cannot be deleted. Remove their assignments and reset the password to cut off access.`);
+    }
+    const auth = await db().auth.admin.deleteUser(id);
+    if (auth.error) throw new RpcError(`The profile was removed but the login could not be deleted: ${auth.error.message}`, 500);
+    await audit(p, "user.delete", "profile", id, { name: target.name, role: target.role });
+    return { ok: true };
+  },
+
   async adminResetPassword(ctx, args) {
     const p = admin(ctx);
     const id = str(args.user_id, "User");
