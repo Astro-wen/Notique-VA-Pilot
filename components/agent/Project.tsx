@@ -121,9 +121,14 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
           <p className="text-[13px] text-ink-3">{projectLine(data.project)}</p>
         </div>
         {!preview ? (
-          <Button data-tour="add-conversation" variant="primary" size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setAdd(true)}>
-            Add conversation
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={() => setNewTask(true)}>
+              New task
+            </Button>
+            <Button data-tour="add-conversation" variant="primary" size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setAdd(true)}>
+              Add conversation
+            </Button>
+          </div>
         ) : null}
       </div>
 

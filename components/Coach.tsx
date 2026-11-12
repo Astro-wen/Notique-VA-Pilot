@@ -282,6 +282,7 @@ export const TOURS = {
   agentHome: [
     { title: "Welcome to Notique", body: "Your assistant turns each client conversation into verified notes and follow-up work. Here is where things are." },
     { target: "add-conversation", title: "Start here", body: "Upload a recording, a transcript, a text thread, or a quick voice memo after a meeting." },
+    { target: "new-task", title: "Ask for anything", body: "Need research, a comparison, or a draft? Write a task for your assistant here, or assign the ones suggested inside each project." },
     { target: "project-list", title: "One project per client", body: "Open a client to see what was decided, what changed, and what is still open." },
     { target: "user-menu", title: "Help lives here", body: "Replay this tour or open Help any time." },
   ],

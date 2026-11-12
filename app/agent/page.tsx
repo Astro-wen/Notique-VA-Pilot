@@ -10,6 +10,7 @@ import { AddEventDialog } from "@/components/AddEventDialog";
 import { Authed, useSession } from "@/components/Session";
 import { UserMenu } from "@/components/UserMenu";
 import { AgentProject } from "@/components/agent/Project";
+import { TaskFormDialog } from "@/components/agent/TaskCard";
 import { Coach, TOURS } from "@/components/Coach";
 import { Badge, Button, Card, Empty, ErrorNote, Field, Input, Logo, Modal, Select, Spinner, useLoad, useToast } from "@/components/ui";
 
@@ -78,6 +79,7 @@ function AgentApp() {
   const { data, error, loading, reload } = useLoad(() => rpc<ProjectListItem[]>("listProjects"), []);
   const [create, setCreate] = useState(false);
   const [add, setAdd] = useState(false);
+  const [task, setTask] = useState(false);
 
   return (
     <div className="min-h-screen">
@@ -105,6 +107,11 @@ function AgentApp() {
               </div>
               <div className="flex gap-2">
                 <Button onClick={() => setCreate(true)}>New project</Button>
+                {data && data.length > 0 ? (
+                  <Button data-tour="new-task" onClick={() => setTask(true)}>
+                    New task
+                  </Button>
+                ) : null}
                 <Button data-tour="add-conversation" variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => setAdd(true)}>
                   Add conversation
                 </Button>
@@ -146,6 +153,17 @@ function AgentApp() {
           </>
         )}
       </main>
+      <TaskFormDialog
+        open={task}
+        onClose={() => setTask(false)}
+        projectId=""
+        projects={data ?? []}
+        onSaved={(t) => {
+          reload(true);
+          toast("Sent to your assistant. You will see a delivery time once they start.");
+          router.push(`/agent?project=${t.project_id}`);
+        }}
+      />
       <NewProject
         open={create}
         onClose={() => setCreate(false)}

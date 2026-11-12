@@ -16,23 +16,26 @@ export const AGENT_STATUS: Record<string, { label: string; tone: Tone }> = {
   cancelled: { label: "Cancelled", tone: "neutral" },
 };
 
-export function TaskFormDialog({ open, onClose, projectId, task, onSaved }: { open: boolean; onClose: () => void; projectId: string; task?: Task | null; onSaved: (task: Task) => void }) {
+export function TaskFormDialog({ open, onClose, projectId, task, onSaved, projects }: { open: boolean; onClose: () => void; projectId: string; task?: Task | null; onSaved: (task: Task) => void; projects?: { id: string; client_name: string }[] }) {
   const toast = useToast();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("Research");
   const [busy, setBusy] = useState(false);
+  const [pid, setPid] = useState(projectId);
   useEffect(() => {
     if (!open) return;
+    setPid(projectId || (projects?.length === 1 ? projects[0].id : ""));
     setTitle(task?.title ?? "");
     setDescription(task?.description ?? "");
     setCategory(task?.category ?? "Research");
   }, [open, task]);
   async function save() {
+    if (!task && !pid) return toast("Choose which client this is for.", { tone: "error" });
     if (!title.trim() || !description.trim()) return toast("Add a title and a short description.", { tone: "error" });
     setBusy(true);
     try {
-      const saved = task ? await rpc<Task>("updateTask", { task_id: task.id, title, description, category }) : await rpc<Task>("createTask", { project_id: projectId, title, description, category });
+      const saved = task ? await rpc<Task>("updateTask", { task_id: task.id, title, description, category }) : await rpc<Task>("createTask", { project_id: pid, title, description, category });
       onSaved(saved);
       onClose();
     } catch (err) {
@@ -56,6 +59,20 @@ export function TaskFormDialog({ open, onClose, projectId, task, onSaved }: { op
       }
     >
       <div className="space-y-4">
+        {projects && !task ? (
+          <Field label="Client">
+            <Select value={pid} onChange={(e) => setPid(e.target.value)}>
+              <option value="" disabled>
+                Choose a project
+              </option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.client_name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        ) : null}
         <Field label="What do you need?">
           <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} placeholder="Draft a follow-up email after Saturday's showing" />
         </Field>
