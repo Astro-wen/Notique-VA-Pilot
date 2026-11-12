@@ -174,23 +174,26 @@ export function Tabs<T extends string>({ tabs, value, onChange, className }: { t
 export function Modal({ open, onClose, title, children, footer, wide }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode; footer?: React.ReactNode; wide?: boolean }) {
   const titleId = useId();
   const ref = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
-        onClose();
+        closeRef.current();
       }
     };
     window.addEventListener("keydown", onKey, true);
     const previous = document.activeElement as HTMLElement | null;
+    // Focus once when the dialog opens. Never again while the user is typing.
     const first = ref.current?.querySelector<HTMLElement>("input,textarea,select,button[data-autofocus]");
     first?.focus();
     return () => {
       window.removeEventListener("keydown", onKey, true);
       previous?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" data-modal onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
