@@ -57,6 +57,7 @@ function parsePlain(raw: string): RawLine[] {
   const lines: RawLine[] = [];
   const rows = raw.replace(/\r/g, "").split("\n").map((r) => r.trim());
   let pendingTs: number | null = null;
+  let sawSpeaker = false;
   for (const row of rows) {
     if (!row) continue;
     let rest = row;
@@ -73,11 +74,13 @@ function parsePlain(raw: string): RawLine[] {
     const { speaker, text } = splitSpeaker(rest);
     if (!text) continue;
     const prev = lines[lines.length - 1];
-    if (!speaker && ts === null && pendingTs === null && prev && prev.text.length < 600) {
+    if (speaker) sawSpeaker = true;
+    // Continuation lines join the previous turn only in a dialogue. Notes keep one line per row so each fact can cite its own line.
+    if (sawSpeaker && !speaker && ts === null && pendingTs === null && prev && prev.text.length < 600) {
       prev.text = `${prev.text} ${text}`;
       continue;
     }
-    lines.push({ start_ms: ts ?? pendingTs, speaker: speaker ?? prev?.speaker ?? "Speaker", text });
+    lines.push({ start_ms: ts ?? pendingTs, speaker: speaker ?? prev?.speaker ?? "Note", text });
     pendingTs = null;
   }
   if (lines.length === 1 && lines[0].text.length > 400) {

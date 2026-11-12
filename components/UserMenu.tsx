@@ -44,7 +44,7 @@ export function UserMenu() {
               className={item}
               onClick={() => {
                 setOpen(false);
-                replayTours(profile.id);
+                replayTours(profile.id, profile.role === "agent" ? "/agent" : "/va");
               }}
             >
               <GraduationCap className="h-4 w-4" /> Replay tutorial

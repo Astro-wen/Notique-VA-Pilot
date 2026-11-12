@@ -193,7 +193,7 @@ export function TaskCard({ taskId, vaName, tz, preview, onClose, onChanged }: { 
           <div>
             <h4 className={label}>Your attachments</h4>
             <div className="mt-2 space-y-2">
-              {attachments.length === 0 ? <p className="text-[13px] text-ink-3">Nothing attached.</p> : attachments.map((f) => <FileItem key={f.id} file={f} canDelete={!preview} onDeleted={() => reload(true)} />)}
+              {attachments.length === 0 ? <p className="text-[13px] text-ink-3">Nothing attached.</p> : attachments.map((f) => <FileItem key={f.id} file={f} canDelete={!preview && f.uploaded_role === "agent"} onDeleted={() => reload(true)} />)}
               {!preview && !["cancelled", "delivered", "dismissed"].includes(task.status) ? <AddFile projectId={task.project_id} taskId={task.id} kind="attachment" allowLink label="Attach file" onAdded={() => reload(true)} /> : null}
             </div>
           </div>

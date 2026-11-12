@@ -29,7 +29,8 @@ function confidenceLabel(c: number | null): { text: string; tone: "ok" | "warn" 
 function typing(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   if (!el) return false;
-  return ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName) || el.isContentEditable;
+  if (el.tagName === "INPUT") return !["checkbox", "radio", "button", "range"].includes((el as HTMLInputElement).type);
+  return ["TEXTAREA", "SELECT"].includes(el.tagName) || el.isContentEditable;
 }
 
 interface Draft {

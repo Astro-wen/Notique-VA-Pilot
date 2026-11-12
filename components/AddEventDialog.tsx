@@ -73,6 +73,8 @@ export function AddEventDialog({ open, onClose, projects, agentId, defaultProjec
     if (!projectId) return setError("Choose a project.");
     if (projectId === "new" && !newClient.trim()) return setError("Enter the client name for the new project.");
     if (!title.trim()) return setError("Give this a short title, for example Second showing recap.");
+    if (!when || Number.isNaN(new Date(when).getTime())) return setError("Enter when the conversation happened.");
+    if (new Date(when).getTime() > Date.now() + 5 * 60000) return setError("The conversation time cannot be in the future.");
     if (kind === "audio" && files.length === 0) return setError("Choose a recording to upload.");
     if (kind !== "audio" && files.length === 0 && text.trim().length < 20) return setError(kind === "texts" ? "Add screenshots or paste the thread." : "Add a file or paste the text.");
     try {

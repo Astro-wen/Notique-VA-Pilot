@@ -179,10 +179,13 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        closeRef.current();
-      }
+      if (e.key !== "Escape") return;
+      const dialogs = Array.from(document.querySelectorAll("[data-modal]"));
+      const mine = ref.current?.closest("[data-modal]");
+      if (dialogs.length && dialogs[dialogs.length - 1] !== mine && !mine?.contains(dialogs[dialogs.length - 1]) ) return;
+      if (mine && dialogs.some((d) => d !== mine && mine.contains(d))) return;
+      e.stopPropagation();
+      closeRef.current();
     };
     window.addEventListener("keydown", onKey, true);
     const previous = document.activeElement as HTMLElement | null;

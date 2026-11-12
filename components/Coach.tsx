@@ -17,16 +17,18 @@ function seenKey(userId: string, name: string) {
   return `notique.tour.${userId}.${name}`;
 }
 
-/** Clears every finished tour for this user and restarts the one on screen. */
-export function replayTours(userId: string) {
+let mounted = 0;
+const ALL_TOURS = ["va-home", "va-verify", "va-ticket", "agent-home", "agent-project", "admin"];
+
+/** Marks every tour as unseen for this user and restarts the one on screen, or goes to the home screen if this page has none. */
+export function replayTours(userId: string, home: string) {
   try {
-    for (const key of Object.keys(window.localStorage)) {
-      if (key.startsWith(`notique.tour.${userId}.`)) window.localStorage.removeItem(key);
-    }
+    for (const name of ALL_TOURS) window.localStorage.setItem(seenKey(userId, name), "0");
   } catch {
     /* Storage is unavailable. The tour still replays for this visit. */
   }
-  window.dispatchEvent(new Event(REPLAY_EVENT));
+  if (mounted > 0) window.dispatchEvent(new Event(REPLAY_EVENT));
+  else window.location.assign(home);
 }
 
 function findTarget(name?: string): HTMLElement | null {
@@ -70,18 +72,27 @@ export function Coach({ name, steps, ready = true, primary }: { name: string; st
 
   useEffect(() => {
     if (!ready || !userId) return;
-    let seen = false;
+    let stored: string | null = null;
     try {
-      seen = window.localStorage.getItem(seenKey(userId, name)) === "1";
+      stored = window.localStorage.getItem(seenKey(userId, name));
     } catch {
-      seen = false;
+      stored = null;
     }
-    if (primary && me?.profile.onboarded_at) seen = true;
+    // "0" means the user asked to replay. Otherwise the account flag covers a new browser.
+    const seen = stored === "1" || (stored !== "0" && !!primary && !!me?.profile.onboarded_at);
     if (seen) return;
     const id = window.setTimeout(start, 500);
     return () => window.clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, userId, name]);
+
+  useEffect(() => {
+    if (!ready) return;
+    mounted += 1;
+    return () => {
+      mounted -= 1;
+    };
+  }, [ready]);
 
   useEffect(() => {
     if (!ready) return;
