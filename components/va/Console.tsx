@@ -105,7 +105,7 @@ export function Console() {
         <span className="hidden rounded-md bg-page px-2 py-0.5 text-xs font-medium text-ink-2 sm:inline">VA Console</span>
         <div className="ml-auto flex items-center gap-3">
           {agents.length > 0 && agent ? (
-            <label className="flex items-center gap-2 text-[13px] text-ink-3">
+            <label data-tour="agent-select" className="flex items-center gap-2 text-[13px] text-ink-3">
               <span className="hidden sm:inline">Serving</span>
               <Select aria-label="Serving agent" className="!h-8 !w-auto max-w-56 font-medium text-ink" value={agent.id} onChange={(e) => chooseAgent(e.target.value)}>
                 {agents.map((a) => (
@@ -129,7 +129,7 @@ export function Console() {
               const active = n.key === view || n.also?.includes(view);
               const count = n.key === "queue" ? counts?.queue : n.key === "tasks" ? counts?.tasks : undefined;
               return (
-                <button key={n.key} onClick={() => go(n.key)} aria-current={active ? "page" : undefined} className={cx("flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm", active ? "bg-accent-soft font-semibold text-[#2f55cc]" : "text-ink-2 hover:bg-page")}>
+                <button key={n.key} data-tour={`nav-${n.key}`} onClick={() => go(n.key)} aria-current={active ? "page" : undefined} className={cx("flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm", active ? "bg-accent-soft font-semibold text-[#2f55cc]" : "text-ink-2 hover:bg-page")}>
                   {n.icon}
                   <span className="flex-1 text-left">{n.label}</span>
                   {count ? <span className={cx("rounded-full px-1.5 text-xs", active ? "bg-accent text-white" : "bg-[#e7e9ec] text-ink-2")}>{count}</span> : null}
@@ -185,7 +185,7 @@ export function Console() {
           {NAV.map((n) => {
             const active = n.key === view || n.also?.includes(view);
             return (
-              <button key={n.key} onClick={() => go(n.key)} className={cx("flex h-14 flex-1 flex-col items-center justify-center gap-0.5 text-[11px]", active ? "font-semibold text-accent" : "text-ink-3")}>
+              <button key={n.key} data-tour={`nav-${n.key}`} onClick={() => go(n.key)} className={cx("flex h-14 flex-1 flex-col items-center justify-center gap-0.5 text-[11px]", active ? "font-semibold text-accent" : "text-ink-3")}>
                 {n.icon}
                 {n.label}
               </button>

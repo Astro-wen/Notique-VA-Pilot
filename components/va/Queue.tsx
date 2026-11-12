@@ -7,6 +7,7 @@ import type { EventRow, QueueEvent, QueueResult } from "@/lib/types";
 import { AddEventDialog, type AddKind } from "../AddEventDialog";
 import { Badge, Button, Card, Empty, ErrorNote, IconButton, SectionTitle, Spinner, useLoad, useToast } from "../ui";
 import type { VaNav } from "./Console";
+import { Coach, TOURS } from "../Coach";
 
 export function DueCell({ iso, tz }: { iso: string | null; tz: string }) {
   const left = remaining(iso);
@@ -127,7 +128,7 @@ export function Queue({ nav }: { nav: VaNav }) {
             Serving {data.agent.name}. Times are shown in {tzAbbr(tz)}.
           </p>
         </div>
-        <Button variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => setAdd("audio")}>
+        <Button data-tour="add-conversation" variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => setAdd("audio")}>
           Add conversation
         </Button>
       </div>
@@ -145,7 +146,7 @@ export function Queue({ nav }: { nav: VaNav }) {
         ))}
       </div>
 
-      <Card className="mt-5 overflow-hidden">
+      <Card className="mt-5 overflow-hidden" data-tour="queue-table">
         <SectionTitle className="border-b border-line px-4 py-3" right={<span className="text-xs text-ink-3">Earliest deadline first</span>}>
           Events to verify
         </SectionTitle>
@@ -204,6 +205,7 @@ export function Queue({ nav }: { nav: VaNav }) {
       </Card>
 
       <Processing rows={data.processing} nav={nav} reload={() => reload(true)} />
+      <Coach name="va-home" steps={TOURS.vaHome} primary />
 
       {data.ticketsDue.length ? (
         <Card className="mt-5">

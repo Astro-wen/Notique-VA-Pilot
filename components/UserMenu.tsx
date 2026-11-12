@@ -3,18 +3,13 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { CircleHelp, GraduationCap, LogOut, Settings2 } from "lucide-react";
 import { useSession } from "./Session";
-import { Tour } from "./Tour";
+import { replayTours } from "./Coach";
 
 export function UserMenu() {
   const { me, signOut } = useSession();
   const [open, setOpen] = useState(false);
-  const [tour, setTour] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const profile = me?.profile;
-
-  useEffect(() => {
-    if (profile && !profile.onboarded_at) setTour(true);
-  }, [profile?.id, profile?.onboarded_at]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!open) return;
@@ -34,7 +29,7 @@ export function UserMenu() {
     .toUpperCase();
   const item = "flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-ink-2 hover:bg-page";
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative" data-tour="user-menu">
       <button aria-label="Account menu" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="flex h-8 w-8 items-center justify-center rounded-full bg-ink text-xs font-semibold text-white">
         {initials || "N"}
       </button>
@@ -49,7 +44,7 @@ export function UserMenu() {
               className={item}
               onClick={() => {
                 setOpen(false);
-                setTour(true);
+                replayTours(profile.id);
               }}
             >
               <GraduationCap className="h-4 w-4" /> Replay tutorial
@@ -68,7 +63,6 @@ export function UserMenu() {
           </div>
         </div>
       ) : null}
-      <Tour open={tour} onClose={() => setTour(false)} />
     </div>
   );
 }

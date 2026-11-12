@@ -146,7 +146,7 @@ export function Select({ className, children, ...rest }: React.SelectHTMLAttribu
 
 /* ---------- Tabs ---------- */
 
-export function Tabs<T extends string>({ tabs, value, onChange, className }: { tabs: { key: T; label: string; count?: number }[]; value: T; onChange: (key: T) => void; className?: string }) {
+export function Tabs<T extends string>({ tabs, value, onChange, className }: { tabs: { key: T; label: string; count?: number; tour?: string }[]; value: T; onChange: (key: T) => void; className?: string }) {
   return (
     <div role="tablist" className={cx("flex gap-5 overflow-x-auto border-b border-line", className)}>
       {tabs.map((t) => {
@@ -155,6 +155,7 @@ export function Tabs<T extends string>({ tabs, value, onChange, className }: { t
           <button
             key={t.key}
             role="tab"
+            data-tour={t.tour}
             aria-selected={active}
             onClick={() => onChange(t.key)}
             className={cx("-mb-px flex h-10 shrink-0 items-center gap-1.5 border-b-2 text-sm", active ? "border-ink font-semibold text-ink" : "border-transparent text-ink-3 hover:text-ink")}

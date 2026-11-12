@@ -6,6 +6,7 @@ import { rpc } from "@/lib/client/api";
 import type { AdminUser } from "@/lib/types";
 import { Authed } from "@/components/Session";
 import { UserMenu } from "@/components/UserMenu";
+import { Coach, TOURS } from "@/components/Coach";
 import { Badge, Button, Card, Empty, ErrorNote, Field, Input, Logo, Modal, Select, Spinner, useLoad, useToast } from "@/components/ui";
 
 const ZONES = ["America/Los_Angeles", "America/Denver", "America/Phoenix", "America/Chicago", "America/New_York", "Pacific/Honolulu", "America/Anchorage", "Asia/Taipei", "Asia/Manila"];
@@ -84,7 +85,7 @@ function AdminPage() {
             <h1 className="text-xl font-semibold">People</h1>
             <p className="mt-0.5 text-[13px] text-ink-3">Create accounts, then choose which agents each VA serves.</p>
           </div>
-          <Button variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => setCreate(true)}>
+          <Button data-tour="admin-add" variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => setCreate(true)}>
             Add person
           </Button>
         </div>
@@ -110,7 +111,7 @@ function AdminPage() {
               </ul>
             </Card>
 
-            <h2 className="mt-8 text-[15px] font-semibold">Who serves whom</h2>
+            <h2 data-tour="admin-matrix" className="mt-8 w-fit text-[15px] font-semibold">Who serves whom</h2>
             <p className="mt-0.5 text-[13px] text-ink-3">A VA only sees the agents ticked here. Admins see every agent.</p>
             {vas.length === 0 || agents.length === 0 ? (
               <Card className="mt-3">
@@ -147,6 +148,8 @@ function AdminPage() {
           </>
         ) : null}
       </main>
+
+      <Coach name="admin" steps={TOURS.admin} ready={!!data} />
 
       <Modal
         open={create}

@@ -9,6 +9,7 @@ import { DealFacts, FactRow } from "../DealFacts";
 import { AddFile, FileItem } from "../FileList";
 import { Badge, Button, Card, Empty, ErrorNote, Spinner, Tabs, useLoad, useToast } from "../ui";
 import { AGENT_STATUS, TaskCard, TaskFormDialog } from "./TaskCard";
+import { Coach, TOURS } from "../Coach";
 
 type Tab = "status" | "timeline" | "tasks" | "files";
 
@@ -120,7 +121,7 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
           <p className="text-[13px] text-ink-3">{projectLine(data.project)}</p>
         </div>
         {!preview ? (
-          <Button variant="primary" size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setAdd(true)}>
+          <Button data-tour="add-conversation" variant="primary" size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setAdd(true)}>
             Add conversation
           </Button>
         ) : null}
@@ -131,10 +132,10 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
         value={tab}
         onChange={setTab}
         tabs={[
-          { key: "status", label: "Deal status" },
-          { key: "timeline", label: "Timeline" },
-          { key: "tasks", label: "Tasks", count: suggested.length + needsAnswer + unreviewed },
-          { key: "files", label: "Files" },
+          { key: "status", label: "Deal status", tour: "tab-status" },
+          { key: "timeline", label: "Timeline", tour: "tab-timeline" },
+          { key: "tasks", label: "Tasks", count: suggested.length + needsAnswer + unreviewed, tour: "tab-tasks" },
+          { key: "files", label: "Files", tour: "tab-files" },
         ]}
       />
 
@@ -311,6 +312,7 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
         </div>
       ) : null}
 
+      {!preview ? <Coach name="agent-project" steps={TOURS.agentProject} /> : null}
       <TaskCard taskId={taskId} vaName={vaName} tz={tz} preview={preview} onClose={() => setTaskId(null)} onChanged={() => reload(true)} />
       <TaskFormDialog
         open={newTask}

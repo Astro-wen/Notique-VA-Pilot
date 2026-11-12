@@ -8,6 +8,7 @@ import { AddFile, FileItem } from "../FileList";
 import { TaskThread } from "../TaskThread";
 import { Badge, Button, ErrorNote, Field, Input, Modal, Select, Spinner, Textarea, useLoad, useNow, useToast, type Tone } from "../ui";
 import type { VaNav } from "./Console";
+import { Coach, TOURS } from "../Coach";
 
 export const STATUS_TONE: Record<TaskStatus, Tone> = { suggested: "neutral", received: "accent", in_progress: "dark", waiting: "warn", delivered: "ok", cancelled: "neutral", dismissed: "neutral" };
 
@@ -172,7 +173,7 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
             </Select>
           </Field>
           <Field label={`ETA (${tzAbbr(Intl.DateTimeFormat().resolvedOptions().timeZone)}, your time)`} hint={task.eta ? `Agent sees ${dateTime(task.eta, tz, true)}${etaLeft ? `, ${etaLeft.text.toLowerCase()}` : ""}` : "Set this first. The agent sees it right away."}>
-            <div className="flex gap-2">
+            <div className="flex gap-2" data-tour="ticket-eta">
               <Input className="min-w-0" type="datetime-local" value={eta} min={toLocalInput(null)} onChange={(e) => setEta(e.target.value)} />
               <Button className="!h-9 shrink-0" variant={task.eta ? "outline" : "primary"} disabled={!eta || (!!task.eta && toLocalInput(task.eta) === eta)} busy={busy === "eta"} onClick={() => run("eta", "setTaskEta", { eta: new Date(eta).toISOString() }, "ETA saved.")}>
                 {task.eta ? "Update" : "Set"}
@@ -181,7 +182,7 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
           </Field>
           <div>
             <span className="mb-1 block text-[13px] font-medium text-ink-2">Time logged</span>
-            <div className="flex items-center gap-2">
+            <div className="flex w-fit items-center gap-2" data-tour="ticket-timer">
               <span className="font-mono text-lg">{clock(logged)}</span>
               {task.timer_started_at ? (
                 <Button size="sm" icon={<Pause className="h-3.5 w-3.5" />} busy={busy === "timer"} onClick={() => run("timer", "taskTimer", { action: "pause" })}>
@@ -226,7 +227,7 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
         </div>
       </div>
 
-      <div>
+      <div data-tour="ticket-deliverables">
         <h3 className={label}>Deliverables</h3>
         <div className="mt-2 space-y-2">
           {deliverables.length === 0 ? <p className="text-[13px] text-ink-3">{open ? "Upload the file or paste a link to the document. The agent sees it only after you mark the ticket delivered." : "None."}</p> : null}
@@ -251,7 +252,7 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
         </div>
       ) : null}
 
-      <div>
+      <div data-tour="ticket-thread">
         <h3 className={label}>Conversation with {nav.agent.name.split(" ")[0]}</h3>
         <div className="mt-2">
           <TaskThread
@@ -272,11 +273,13 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
       {open ? (
         <div className="sticky bottom-0 -mx-4 flex items-center justify-between gap-3 border-t border-line bg-white px-4 py-3">
           <span className="text-[13px] text-ink-3">{task.status === "received" ? "Set an ETA to start." : deliverables.length === 0 ? "Add a deliverable to finish." : "Ready when you are."}</span>
-          <Button variant="primary" icon={<Send className="h-4 w-4" />} disabled={task.status === "received" || deliverables.length === 0} onClick={() => setConfirm("deliver")}>
+          <Button data-tour="ticket-deliver" variant="primary" icon={<Send className="h-4 w-4" />} disabled={task.status === "received" || deliverables.length === 0} onClick={() => setConfirm("deliver")}>
             Mark delivered
           </Button>
         </div>
       ) : null}
+
+      {open ? <Coach name="va-ticket" steps={TOURS.vaTicket} /> : null}
 
       <Modal
         open={confirm !== null}

@@ -6,6 +6,7 @@ import { SOURCE_LABEL, clock, dateTime, plainDate, remaining } from "@/lib/clien
 import { SECTIONS, TASK_CATEGORIES, type EventChecks, type EventDetail, type Fact, type Section, type SuggestedTask, type Verdict } from "@/lib/types";
 import { Badge, Button, ErrorNote, Field, IconButton, Input, Kbd, Modal, Select, Spinner, Textarea, cx, useToast } from "../ui";
 import type { VaNav } from "./Console";
+import { Coach, TOURS } from "../Coach";
 
 const CHECKS: { key: keyof EventChecks; label: string; help: string }[] = [
   { key: "consent", label: "Consent heard", help: "Everyone on the recording was told it is being recorded, or this source does not need consent (notes, texts)." },
@@ -416,7 +417,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
         ) : event.status === "failed" || event.status === "processing" || event.status === "extracting" ? (
           <ErrorNote className="mt-3" message={event.status === "failed" ? event.error ?? "Processing failed. Retry it from the queue." : "This event is still being prepared. Go back to the queue and it will appear when ready."} />
         ) : (
-          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
+          <div data-tour="checks" className="mt-3 flex w-fit flex-wrap gap-x-5 gap-y-2">
             {CHECKS.map((c) => (
               <label key={c.key} className="flex items-center gap-2 text-[13px]" title={c.help}>
                 <input type="checkbox" className="h-4 w-4 accent-[#177245]" checked={!!checks[c.key]} onChange={(e) => setCheck(c.key, e.target.checked)} />
@@ -473,7 +474,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
             ) : null}
             {detail.audioUrl ? <audio ref={audioRef} controls preload="none" src={detail.audioUrl} className="h-9 w-full" /> : null}
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+          <div data-tour="transcript" className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
             {detail.lines.length === 0 ? <p className="p-4 text-[13px] text-ink-3">This event has no transcript.</p> : null}
             {detail.lines.map((l) => {
               const isSelected = selected.includes(l.id);
@@ -549,7 +550,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                         Clear
                       </Button>
                     ) : null}
-                    <Button size="sm" icon={<Plus className="h-3.5 w-3.5" />} disabled={selected.length === 0} onClick={() => setAdding({ section: "decisions", statement: "" })}>
+                    <Button data-tour="add-fact" size="sm" icon={<Plus className="h-3.5 w-3.5" />} disabled={selected.length === 0} onClick={() => setAdding({ section: "decisions", statement: "" })}>
                       Add fact from selection
                     </Button>
                   </div>
@@ -589,6 +590,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                           key={f.id}
                           id={`fact-${f.id}`}
                           data-pending-fact={!done ? "" : undefined}
+                          data-tour={f.id === (facts.find((x) => x.verdict === "pending") ?? facts[0])?.id ? "fact" : undefined}
                           onClick={() => setFocusId(f.id)}
                           className={cx("rounded-xl border bg-white p-3.5 transition-shadow", focused ? "border-accent shadow-[0_0_0_3px_rgba(75,117,242,0.15)]" : "border-line", done && !editing && f.verdict === "declined" && "opacity-60")}
                         >
@@ -719,13 +721,15 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
               <Button icon={<Flag className="h-4 w-4" />} onClick={() => setEscalate("")}>
                 Escalate
               </Button>
-              <Button variant="primary" disabled={pending > 0 || !checksDone} onClick={() => setConfirm(true)} title={pending > 0 ? "Decide every item first" : !checksDone ? "Confirm all four checks first" : undefined}>
+              <Button data-tour="submit" variant="primary" disabled={pending > 0 || !checksDone} onClick={() => setConfirm(true)} title={pending > 0 ? "Decide every item first" : !checksDone ? "Confirm all four checks first" : undefined}>
                 {pending > 0 ? `Submit (${pending} unresolved)` : !checksDone ? "Submit (checks missing)" : "Submit"}
               </Button>
             </div>
           ) : null}
         </section>
       </div>
+
+      <Coach name="va-verify" steps={TOURS.vaVerify} ready={!readOnly} />
 
       <Modal
         open={confirm}

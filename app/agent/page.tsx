@@ -10,6 +10,7 @@ import { AddEventDialog } from "@/components/AddEventDialog";
 import { Authed, useSession } from "@/components/Session";
 import { UserMenu } from "@/components/UserMenu";
 import { AgentProject } from "@/components/agent/Project";
+import { Coach, TOURS } from "@/components/Coach";
 import { Badge, Button, Card, Empty, ErrorNote, Field, Input, Logo, Modal, Select, Spinner, useLoad, useToast } from "@/components/ui";
 
 function NewProject({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: (p: Project) => void }) {
@@ -104,7 +105,7 @@ function AgentApp() {
               </div>
               <div className="flex gap-2">
                 <Button onClick={() => setCreate(true)}>New project</Button>
-                <Button variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => setAdd(true)}>
+                <Button data-tour="add-conversation" variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => setAdd(true)}>
                   Add conversation
                 </Button>
               </div>
@@ -125,7 +126,7 @@ function AgentApp() {
                 />
               </Card>
             ) : null}
-            <div className="mt-5 space-y-2">
+            <div className="mt-5 space-y-2" data-tour={data && data.length ? "project-list" : undefined}>
               {(data ?? []).map((p) => (
                 <button key={p.id} onClick={() => router.push(`/agent?project=${p.id}`)} className="flex w-full items-center gap-3 rounded-xl border border-line bg-white p-4 text-left hover:border-line-strong">
                   <span className="min-w-0 flex-1">
@@ -141,6 +142,7 @@ function AgentApp() {
                 </button>
               ))}
             </div>
+            <Coach name="agent-home" steps={TOURS.agentHome} ready={!!data} primary />
           </>
         )}
       </main>
