@@ -31,7 +31,7 @@ export function TaskThread({ taskId, messages, viewer, otherName, disabled, canA
   }, [count]);
 
   async function send(ask: boolean) {
-    if (!body.trim()) return;
+    if (!body.trim() || busy) return;
     setBusy(true);
     try {
       await rpc("sendTaskMessage", {

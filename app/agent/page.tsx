@@ -98,7 +98,7 @@ function AgentApp() {
           />
         ) : (
           <>
-            <div className="flex items-end justify-between gap-3">
+            <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
                 <h1 className="text-xl font-semibold">All Projects</h1>
                 <p className="mt-0.5 text-[13px] text-ink-3">Hi {me?.profile.name.split(" ")[0]}. One project per client.</p>

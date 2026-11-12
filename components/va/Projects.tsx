@@ -220,7 +220,7 @@ export function ProjectView({ nav, projectId, tab, taskId }: { nav: VaNav; proje
         .catch(() => {});
     }, 8000);
     return () => window.clearInterval(id);
-  }, [working, projectId, reload, nav]);
+  }, [working, projectId, reload, nav.refreshCounts]); // eslint-disable-line react-hooks/exhaustive-deps
   if (error && !data) return <ErrorNote message={error} onRetry={() => reload()} />;
   if (loading && !data) return <Spinner />;
   if (!data) return null;

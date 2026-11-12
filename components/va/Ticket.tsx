@@ -189,7 +189,7 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
                   Pause
                 </Button>
               ) : (
-                <Button size="sm" icon={<Play className="h-3.5 w-3.5" />} busy={busy === "timer"} disabled={task.status !== "in_progress"} title={task.status === "received" ? "Set an ETA first" : task.status === "waiting" ? "Waiting on the agent" : undefined} onClick={() => run("timer", "taskTimer", { action: "start" })}>
+                <Button size="sm" icon={<Play className="h-3.5 w-3.5" />} busy={busy === "timer"} disabled={task.status === "received"} title={task.status === "received" ? "Set an ETA first" : task.status === "waiting" ? "Starting the timer resumes this ticket" : undefined} onClick={() => run("timer", "taskTimer", { action: "start" })}>
                   Start
                 </Button>
               )}

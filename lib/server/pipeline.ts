@@ -134,7 +134,7 @@ export async function startTranscription(audioUrl: string): Promise<string> {
   const res = await fetch(`${AAI}/transcript`, {
     method: "POST",
     headers: { authorization: aaiKey(), "content-type": "application/json" },
-    body: JSON.stringify({ audio_url: audioUrl, speaker_labels: true, punctuate: true, format_text: true }),
+    body: JSON.stringify({ audio_url: audioUrl, speaker_labels: true, punctuate: true, format_text: true, language_detection: true }),
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body.id) {
@@ -151,8 +151,14 @@ export interface SttResult {
 }
 
 export async function getTranscription(id: string): Promise<SttResult> {
-  const res = await fetch(`${AAI}/transcript/${id}`, { headers: { authorization: aaiKey() } });
+  let res: Response;
+  try {
+    res = await fetch(`${AAI}/transcript/${id}`, { headers: { authorization: aaiKey() }, signal: AbortSignal.timeout(20000) });
+  } catch {
+    return { status: "processing" }; // Network blip. Try again on the next poll.
+  }
   const body = await res.json().catch(() => ({}));
+  if (res.status === 429 || res.status >= 500) return { status: "processing" };
   if (!res.ok) return { status: "error", error: body.error ?? res.statusText };
   if (body.status === "error") return { status: "error", error: body.error ?? "Transcription failed" };
   if (body.status !== "completed") return { status: body.status === "queued" ? "queued" : "processing" };
@@ -182,8 +188,13 @@ async function chatJson(messages: { role: "system" | "user"; content: ChatConten
   const configured = (process.env.OPENROUTER_MODEL ?? "").split(",").map((m) => m.trim()).filter(Boolean);
   const models = configured.length ? configured : DEFAULT_MODELS;
   let lastError = "";
-  for (const strictPrivacy of [true, false]) {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  // Client conversations are only sent to providers that do not keep or train on them, unless explicitly relaxed.
+  const strictPrivacy = process.env.OPENROUTER_ALLOW_DATA_COLLECTION !== "1";
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    let res: Response;
+    try {
+      res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      signal: AbortSignal.timeout(110000),
       method: "POST",
       headers: {
         authorization: `Bearer ${key}`,
@@ -198,7 +209,11 @@ async function chatJson(messages: { role: "system" | "user"; content: ChatConten
         response_format: { type: "json_object" },
         ...(strictPrivacy ? { provider: { data_collection: "deny" } } : {}),
       }),
-    });
+      });
+    } catch (err) {
+      lastError = (err as Error)?.name === "TimeoutError" ? "The model took too long to answer." : "Could not reach the model.";
+      continue;
+    }
     const body = await res.json().catch(() => ({}));
     const content: unknown = body?.choices?.[0]?.message?.content;
     if (res.ok && typeof content === "string" && content.trim()) {

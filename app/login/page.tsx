@@ -8,7 +8,7 @@ import { Button, Card, ErrorNote, Field, Input, Logo } from "@/components/ui";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { status, me, refresh } = useSession();
+  const { status, me, refresh, error: sessionError } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -62,7 +62,7 @@ export default function LoginPage() {
             <Field label="Password">
               <Input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
             </Field>
-            {error ? <ErrorNote message={error} /> : null}
+            {error ? <ErrorNote message={error} /> : status === "error" && sessionError ? <ErrorNote message={sessionError} /> : null}
             <Button type="submit" variant="primary" size="lg" className="w-full" busy={busy}>
               Sign in
             </Button>

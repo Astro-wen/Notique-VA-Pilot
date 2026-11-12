@@ -55,7 +55,7 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
     setTaskId(null);
   }, [projectId]);
 
-  const pendingCount = data?.pendingEvents ?? 0;
+  const pendingCount = data?.processingEvents ?? 0;
   useEffect(() => {
     if (!pendingCount || preview) return;
     const id = window.setInterval(() => {

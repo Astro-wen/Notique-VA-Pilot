@@ -145,10 +145,22 @@ async function systemMessage(taskId: string, body: string) {
   await db().from("task_messages").insert({ task_id: taskId, sender_role: "system", channel: "in_app", body });
 }
 
-function stripEvent(e: any): EventRow {
-  const { raw_text: _r, stt_id: _s, source_path: _p, ...rest } = e;
-  void _r; void _s; void _p;
-  return rest as EventRow;
+function stripEvent(e: any, forAgent = false): EventRow {
+  const { raw_text: _r, stt_id: _s, source_path: _p, submitted_by: _b, created_by: _c, ...rest } = e;
+  void _r; void _s; void _p; void _b; void _c;
+  if (!forAgent) return rest as EventRow;
+  // Agents only get what a VA has verified. The AI summary and internal review data stay on the VA side.
+  return { ...rest, summary: null, checks: {}, review_ms: 0, escalation_note: null, audio_path: null, speaker_map: {}, error: rest.status === "failed" ? rest.error : null } as EventRow;
+}
+
+async function fetchLines(eventId: string): Promise<any[]> {
+  const all: any[] = [];
+  for (let from = 0; from < 8000; from += 1000) {
+    const page = q(await db().from("transcript_lines").select("*").eq("event_id", eventId).order("idx").range(from, from + 999)) as any[];
+    all.push(...page);
+    if (page.length < 1000) break;
+  }
+  return all;
 }
 
 /* ------------------------------------------------------------------ */
@@ -175,7 +187,7 @@ async function insertLines(eventId: string, lines: RawLine[]) {
 async function runExtraction(eventId: string) {
   const event = q(await db().from("events").select("*").eq("id", eventId).single()) as any;
   const project = q(await db().from("projects").select("*").eq("id", event.project_id).single()) as Project;
-  const lines = q(await db().from("transcript_lines").select("*").eq("event_id", eventId).order("idx")) as any[];
+  const lines = await fetchLines(eventId);
   if (lines.length === 0) throw new PipelineError("No readable text was found in this upload.");
 
   const submitted = q(await db().from("events").select("id").eq("project_id", project.id).eq("status", "submitted")) as { id: string }[];
@@ -203,6 +215,9 @@ async function runExtraction(eventId: string) {
     priorFacts: prior,
   });
 
+  // Another run may have finished while the model was working. Never overwrite facts a VA is already deciding on.
+  const current = q(await db().from("events").select("status").eq("id", eventId).single()) as { status: string };
+  if (current.status !== "extracting") return;
   await db().from("facts").delete().eq("event_id", eventId).eq("origin", "ai");
   const order: Section[] = ["decisions", "budget", "needs", "questions", "risks", "next_steps"];
   const sorted = [...result.facts].sort((a, b) => order.indexOf(a.section) - order.indexOf(b.section) || a.lineIdx[0] - b.lineIdx[0]);
@@ -235,7 +250,14 @@ async function runExtraction(eventId: string) {
   if (rows.length) q(await db().from("facts").insert(rows).select("id"));
 
   const speakerMap = { ...(result.speakers ?? {}), ...(event.speaker_map ?? {}) };
-  await setEventStatus(eventId, "ready", { summary: result.summary || null, speaker_map: speakerMap, error: null });
+  q(
+    await db()
+      .from("events")
+      .update({ status: "ready", status_changed_at: new Date().toISOString(), summary: result.summary || null, speaker_map: speakerMap, error: null })
+      .eq("id", eventId)
+      .eq("status", "extracting")
+      .select("id"),
+  );
 }
 
 async function processText(eventId: string, text: string) {
@@ -259,6 +281,12 @@ async function startAudio(eventId: string, audioPath: string) {
 
 /** Moves a processing event forward if the transcription has finished. */
 async function advanceEvent(event: any): Promise<void> {
+  if (event.status === "processing" && !event.stt_id) {
+    if (Date.now() - new Date(event.status_changed_at).getTime() > 5 * 60 * 1000) {
+      await failEvent(event.id, new PipelineError("Transcription did not start. Press Retry."));
+    }
+    return;
+  }
   if (event.status === "processing" && event.stt_id) {
     const stt = await getTranscription(event.stt_id);
     if (stt.status === "error") {
@@ -377,8 +405,10 @@ async function buildProject(project: Project, forAgent: boolean): Promise<Projec
   const agentRow = q(await db().from("profiles").select("id,name,timezone").eq("id", project.agent_id).single()) as any;
   const vaLink = q(await db().from("assignments").select("va_id").eq("agent_id", project.agent_id).limit(1)) as any[];
   const vaNames = await nameMap(vaLink.map((l) => l.va_id));
-  const allEvents = (q(await db().from("events").select("*").eq("project_id", project.id).order("occurred_at", { ascending: false })) as any[]).map(stripEvent);
+  const rawEvents = q(await db().from("events").select("*").eq("project_id", project.id).order("occurred_at", { ascending: false })) as any[];
+  const allEvents = rawEvents.map((e) => stripEvent(e));
   const submitted = allEvents.filter((e) => e.status === "submitted");
+  const submittedBy = Object.fromEntries(rawEvents.map((e) => [e.id, e.submitted_by as string | null]));
   const submittedIds = submitted.map((e) => e.id);
 
   let facts: Fact[] = [];
@@ -430,16 +460,17 @@ async function buildProject(project: Project, forAgent: boolean): Promise<Projec
   const lastSubmitted = [...submitted].sort((a, b) => (a.submitted_at ?? "").localeCompare(b.submitted_at ?? "")).pop();
   let lastVerified: ProjectDetail["lastVerified"] = null;
   if (lastSubmitted?.submitted_at) {
-    const raw = q(await db().from("events").select("submitted_by").eq("id", lastSubmitted.id).single()) as any;
-    const names = await nameMap([raw.submitted_by]);
-    lastVerified = { at: lastSubmitted.submitted_at, by: names[raw.submitted_by] ?? "the VA team" };
+    const by = submittedBy[lastSubmitted.id];
+    const names = await nameMap([by]);
+    lastVerified = { at: lastSubmitted.submitted_at, by: (by && names[by]) || "the VA team" };
   }
 
   return {
     project,
     agent: agentRow,
     va: vaLink[0] ? { id: vaLink[0].va_id, name: vaNames[vaLink[0].va_id] ?? "Your assistant" } : null,
-    events: forAgent ? submitted : allEvents,
+    events: forAgent ? rawEvents.filter((e) => e.status === "submitted").map((e) => stripEvent(e, true)) : allEvents,
+    processingEvents: allEvents.filter((e) => e.status === "processing" || e.status === "extracting").length,
     facts,
     needsInput,
     tasks,
@@ -477,7 +508,11 @@ export const handlers: Record<string, Handler> = {
     if (password.length < 8) throw new RpcError("Password must be at least 8 characters.");
     const created = await db().auth.admin.createUser({ email, password, email_confirm: true });
     if (created.error || !created.data.user) throw new RpcError(created.error?.message ?? "Could not create the account.");
-    q(await db().from("profiles").insert({ id: created.data.user.id, email, name, role: "admin", timezone: optStr(args.timezone, 60) ?? "America/Los_Angeles" }).select("id"));
+    const inserted = await db().from("profiles").insert({ id: created.data.user.id, email, name, role: "admin", timezone: optStr(args.timezone, 60) ?? "America/Los_Angeles" }).select("id");
+    if (inserted.error) {
+      await db().auth.admin.deleteUser(created.data.user.id);
+      throw new RpcError(`Database error: ${inserted.error.message}`, 500);
+    }
     return { ok: true };
   },
 
@@ -636,14 +671,29 @@ export const handlers: Record<string, Handler> = {
     if (path && !path.startsWith(`${project.agent_id}/${project.id}/`)) throw new RpcError("Invalid file path.");
     if (url && !/^https?:\/\//i.test(url)) throw new RpcError("Links must start with http or https.");
     let taskId: string | null = null;
-    if (args.task_id) taskId = (await loadTask(p, args.task_id)).id;
+    if (args.task_id) {
+      const task = await loadTask(p, args.task_id);
+      if (task.project_id !== project.id) throw new RpcError("That task belongs to a different project.");
+      taskId = task.id;
+    }
+    let eventId: string | null = null;
+    if (args.event_id) {
+      const event = await loadEvent(p, args.event_id);
+      if (event.project_id !== project.id) throw new RpcError("That conversation belongs to a different project.");
+      eventId = event.id;
+    }
+    if (path) {
+      const usedFile = q(await db().from("files").select("id").eq("path", path).limit(1)) as any[];
+      const usedEvent = q(await db().from("events").select("id").or(`audio_path.eq.${path},source_path.eq.${path}`).limit(1)) as any[];
+      if (usedFile.length || usedEvent.length) throw new RpcError("That file is already attached. Upload it again to add another copy.");
+    }
     const row = q(
       await db()
         .from("files")
         .insert({
           project_id: project.id,
           task_id: taskId,
-          event_id: optStr(args.event_id, 60),
+          event_id: eventId,
           kind,
           status: kind === "deliverable" ? "draft" : "delivered",
           name: str(args.name, "File name", 200),
@@ -668,8 +718,12 @@ export const handlers: Record<string, Handler> = {
     await loadProject(p, row.project_id);
     if (row.kind === "deliverable" && row.status === "delivered") throw new RpcError("Delivered files cannot be removed.");
     if (p.role === "agent" && row.uploaded_by !== p.id) throw new RpcError("You can only remove files you uploaded.", 403);
-    if (row.path) await db().storage.from(BUCKET).remove([row.path]);
     q(await db().from("files").delete().eq("id", row.id).select("id"));
+    if (row.path) {
+      const others = q(await db().from("files").select("id").eq("path", row.path).limit(1)) as any[];
+      const events = q(await db().from("events").select("id").or(`audio_path.eq.${row.path},source_path.eq.${row.path}`).limit(1)) as any[];
+      if (others.length === 0 && events.length === 0) await db().storage.from(BUCKET).remove([row.path]);
+    }
     return { ok: true };
   },
 
@@ -747,7 +801,7 @@ export const handlers: Record<string, Handler> = {
     } catch (err) {
       await failEvent(event.id, err);
     }
-    return stripEvent(q(await db().from("events").select("*").eq("id", event.id).single()));
+    return stripEvent(q(await db().from("events").select("*").eq("id", event.id).single()), p.role === "agent");
   },
 
   async pollEvents(ctx, args) {
@@ -761,7 +815,7 @@ export const handlers: Record<string, Handler> = {
       } catch (err) {
         await failEvent(event.id, err);
       }
-      out.push(stripEvent(q(await db().from("events").select("*").eq("id", event.id).single())));
+      out.push(stripEvent(q(await db().from("events").select("*").eq("id", event.id).single()), p.role === "agent"));
     }
     return out;
   },
@@ -828,7 +882,7 @@ export const handlers: Record<string, Handler> = {
 
     const rows = (q(
       await db().from("events").select("*").eq("agent_id", agentId).in("status", ["processing", "extracting", "ready", "in_review", "failed", "escalated"]).order("due_at", { ascending: true }),
-    ) as any[]).map(stripEvent);
+    ) as any[]).map((e) => stripEvent(e));
     const projects = q(await db().from("projects").select("*").eq("agent_id", agentId).is("archived_at", null).order("client_name")) as Project[];
     const ids = rows.map((e) => e.id);
     const facts = ids.length ? (q(await db().from("facts").select("event_id,verdict").in("event_id", ids)) as any[]) : [];
@@ -887,7 +941,7 @@ export const handlers: Record<string, Handler> = {
       event = { ...event, status: "in_review" };
     }
     const project = q(await db().from("projects").select("*").eq("id", event.project_id).single()) as Project;
-    const lines = q(await db().from("transcript_lines").select("*").eq("event_id", event.id).order("idx")) as any[];
+    const lines = await fetchLines(event.id);
     const facts = (q(await db().from("facts").select("*").eq("event_id", event.id).order("position").order("created_at")) as any[]).map((f) => ({
       ...f,
       confidence: f.confidence === null ? null : Number(f.confidence),
@@ -918,6 +972,10 @@ export const handlers: Record<string, Handler> = {
     const p = staff(ctx);
     const event = await loadEvent(p, args.event_id);
     const patch: Record<string, unknown> = {};
+    const locked = event.status === "submitted";
+    if (locked && (args.checks || args.speaker_map || typeof args.title === "string")) {
+      throw new RpcError("This event is already submitted. Reopen it to make changes.");
+    }
     if (args.checks && typeof args.checks === "object") {
       const next = { ...(event.checks ?? {}) } as Record<string, boolean>;
       for (const key of ["consent", "pii", "fair_housing", "type_match"]) {
@@ -955,6 +1013,9 @@ export const handlers: Record<string, Handler> = {
     }
     if (verdict === "edited") {
       patch.statement = str(args.statement, "Statement", 400);
+    }
+    if (verdict === "approved" && fact.origin === "ai" && fact.ai_statement) {
+      patch.statement = fact.ai_statement;
     }
     if (verdict === "pending") {
       patch.statement = fact.origin === "ai" && fact.ai_statement ? fact.ai_statement : fact.statement;
@@ -1039,6 +1100,16 @@ export const handlers: Record<string, Handler> = {
 
     const accepted = facts.filter((f) => f.verdict === "approved" || f.verdict === "edited");
     const now = new Date().toISOString();
+    // Claim the event first so a double click or a second VA cannot submit it twice.
+    const claimed = q(
+      await db()
+        .from("events")
+        .update({ status: "submitted", status_changed_at: now, submitted_at: now, submitted_by: p.id })
+        .eq("id", event.id)
+        .in("status", ["ready", "in_review"])
+        .select("id"),
+    ) as any[];
+    if (claimed.length === 0) throw new RpcError("This event is already submitted.");
     const supersededIds = accepted.map((f) => f.supersedes_id).filter(Boolean);
     if (supersededIds.length) {
       q(await db().from("facts").update({ resolved_at: now }).in("id", supersededIds).select("id"));
@@ -1071,7 +1142,6 @@ export const handlers: Record<string, Handler> = {
       }
     }
 
-    await setEventStatus(event.id, "submitted", { submitted_at: now, submitted_by: p.id });
     await audit(p, "event.submit", "event", event.id, { accepted: accepted.length, tasks: created });
     return { ok: true, project_id: event.project_id, suggested_tasks: created, accepted: accepted.length };
   },
@@ -1079,7 +1149,7 @@ export const handlers: Record<string, Handler> = {
   async escalateEvent(ctx, args) {
     const p = staff(ctx);
     const event = await loadEvent(p, args.event_id);
-    if (event.status === "submitted") throw new RpcError("This event is already submitted.");
+    if (!["ready", "in_review"].includes(event.status)) throw new RpcError("Only events that are ready for review can be escalated.");
     await setEventStatus(event.id, "escalated", { escalation_note: str(args.note, "Reason", 400) });
     await audit(p, "event.escalate", "event", event.id);
     return { ok: true };
@@ -1096,6 +1166,12 @@ export const handlers: Record<string, Handler> = {
     if (!event.submitted_at || Date.now() - new Date(event.submitted_at).getTime() > 24 * 3600 * 1000) {
       throw new RpcError("Events can be reopened for 24 hours after they are submitted.");
     }
+    // Undo what the submit did: bring back facts this event replaced, and withdraw suggestions nobody has acted on.
+    const mine = q(await db().from("facts").select("supersedes_id").eq("event_id", event.id).not("supersedes_id", "is", null)) as { supersedes_id: string }[];
+    if (mine.length) {
+      q(await db().from("facts").update({ resolved_at: null }).in("id", mine.map((f) => f.supersedes_id)).select("id"));
+    }
+    q(await db().from("tasks").delete().eq("origin_event_id", event.id).eq("status", "suggested").select("id"));
     await setEventStatus(event.id, "in_review", { submitted_at: null, submitted_by: null });
     await audit(p, "event.reopen", "event", event.id);
     return { ok: true };
@@ -1221,8 +1297,9 @@ export const handlers: Record<string, Handler> = {
     const task = await loadTask(p, args.task_id);
     let patch: Record<string, unknown>;
     if (args.action === "start") {
-      if (task.status !== "in_progress") throw new RpcError(task.status === "received" ? "Set an ETA before you start the timer." : "The timer only runs while a task is in progress.");
+      if (!["in_progress", "waiting"].includes(task.status)) throw new RpcError(task.status === "received" ? "Set an ETA before you start the timer." : "The timer only runs while a task is in progress.");
       patch = task.timer_started_at ? {} : { timer_started_at: new Date().toISOString() };
+      if (task.status === "waiting") patch.status = "in_progress";
     } else {
       patch = pauseTimerPatch(task);
     }
@@ -1370,13 +1447,31 @@ export const handlers: Record<string, Handler> = {
     }
     const project = q(await db().from("projects").select("*").eq("id", link.project_id).single()) as Project;
     const detail = await buildProject(project, true);
+    // Public page: send only the fields it renders.
     return {
-      project,
+      project: { client_name: project.client_name, deal_type: project.deal_type, area: project.area, budget: project.budget } as Project,
       agentName: detail.agent.name,
       vaName: detail.va?.name ?? null,
-      facts: detail.facts.map((f) => ({ ...f, evidence: f.evidence.map((e) => ({ ...e, line_id: "" })) })),
-      events: detail.events,
-      lastVerified: detail.lastVerified,
+      facts: detail.facts.map(
+        (f) =>
+          ({
+            id: f.id,
+            event_id: f.event_id,
+            section: f.section,
+            statement: f.statement,
+            verdict: f.verdict,
+            change_type: f.change_type,
+            changed_from: f.changed_from,
+            follow_up_date: f.follow_up_date,
+            follow_up_condition: f.follow_up_condition,
+            evidence: f.evidence.map((e) => ({ line_id: "", idx: e.idx, start_ms: e.start_ms, speaker: e.speaker, quote: e.quote })),
+            event_title: f.event_title,
+            event_occurred_at: f.event_occurred_at,
+            verified_by_name: f.verified_by_name ? f.verified_by_name.split(" ")[0] : null,
+          }) as Fact,
+      ),
+      events: detail.events.map((e) => ({ id: e.id, title: e.title, source: e.source, occurred_at: e.occurred_at }) as EventRow),
+      lastVerified: detail.lastVerified ? { at: detail.lastVerified.at, by: detail.lastVerified.by.split(" ")[0] } : null,
       expires_at: link.expires_at,
     };
   },

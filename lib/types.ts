@@ -279,6 +279,8 @@ export interface ProjectDetail {
   files: FileRow[];
   shareLink: ShareLink | null;
   pendingEvents: number;
+  /** Uploads still being transcribed or read. */
+  processingEvents: number;
   lastVerified: { at: string; by: string } | null;
 }
 

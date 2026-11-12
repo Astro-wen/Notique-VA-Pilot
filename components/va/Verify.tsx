@@ -230,6 +230,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
 
   async function addFact() {
     if (!adding || !detail) return;
+    if (busy) return;
     if (!adding.statement.trim()) return toast("Write the fact in one sentence.", { tone: "error" });
     setBusy(true);
     try {
@@ -321,9 +322,9 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
       if (facts.length === 0) return;
       const index = Math.max(0, facts.findIndex((f) => f.id === focusId));
       const current = facts[index];
-      if (key === "j" || key === "arrowdown" || key === "k" || key === "arrowup") {
+      if (key === "j" || key === "k") {
         e.preventDefault();
-        const next = facts[Math.min(facts.length - 1, Math.max(0, index + (key === "j" || key === "arrowdown" ? 1 : -1)))];
+        const next = facts[Math.min(facts.length - 1, Math.max(0, index + (key === "j" ? 1 : -1)))];
         setFocusId(next.id);
         document.getElementById(`fact-${next.id}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
         return;
@@ -366,7 +367,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
   };
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] flex-col">
+    <div className="flex h-[calc(100dvh-3.5rem)] flex-col">
       {/* Header */}
       <div className="border-b border-line bg-white px-4 py-3">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -490,7 +491,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                     <input
                       type="checkbox"
                       aria-label={`Select line ${l.idx + 1}`}
-                      className={cx("mt-1 h-3.5 w-3.5 shrink-0 accent-[#4b75f2]", isSelected ? "" : "opacity-0 focus:opacity-100 group-hover:opacity-100")}
+                      className={cx("mt-1 h-3.5 w-3.5 shrink-0 accent-[#4b75f2]", isSelected ? "" : "lg:opacity-0 lg:focus:opacity-100 lg:group-hover:opacity-100")}
                       checked={isSelected}
                       onChange={(e) => setSelected((cur) => (e.target.checked ? [...cur, l.id].slice(-4) : cur.filter((id) => id !== l.id)))}
                     />

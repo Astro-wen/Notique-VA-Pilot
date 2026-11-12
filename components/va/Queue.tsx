@@ -25,6 +25,7 @@ function useQueue(nav: VaNav) {
   const working = (state.data?.processing ?? []).filter((e) => e.status === "processing" || e.status === "extracting");
   const ids = working.map((e) => e.id).join(",");
   const { reload } = state;
+  const { refreshCounts } = nav;
   useEffect(() => {
     if (!ids) return;
     const id = window.setInterval(async () => {
@@ -32,14 +33,14 @@ function useQueue(nav: VaNav) {
         const rows = await rpc<EventRow[]>("pollEvents", { event_ids: ids.split(",") });
         if (rows.some((r) => r.status !== "processing" && r.status !== "extracting")) {
           reload(true);
-          nav.refreshCounts();
+          refreshCounts();
         }
       } catch {
         /* Keep polling. */
       }
     }, 6000);
     return () => window.clearInterval(id);
-  }, [ids, reload, nav]);
+  }, [ids, reload, refreshCounts]);
   return state;
 }
 
@@ -50,8 +51,9 @@ function Processing({ rows, nav, reload }: { rows: QueueEvent[]; nav: VaNav; rel
   async function act(fn: string, id: string, done: string) {
     setBusy(id);
     try {
-      await rpc(fn, { event_id: id });
-      toast(done);
+      const row = await rpc<{ status?: string; error?: string | null } | null>(fn, { event_id: id });
+      if (fn === "retryEvent" && row?.status === "failed") toast(row.error ?? "The retry failed.", { tone: "error" });
+      else toast(done);
       reload();
       nav.refreshCounts();
     } catch (err) {
