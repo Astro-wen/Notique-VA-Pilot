@@ -26,6 +26,8 @@ function confidenceLabel(c: number | null): { text: string; tone: "ok" | "warn" 
   return { text: `Low confidence ${pct}%`, tone: "bad" };
 }
 
+const PROTECTED = /\b(wife|husband|spouse|married|single (mom|mother|dad|father|parent)|divorc\w*|pregnan\w*|kids?|child(ren)?|son|daughter|baby|famil(y|ies)|veteran|military|disab\w*|wheelchair|religio\w*|church|mosque|temple|synagogue|christian|muslim|jewish|hindu|race|ethnic\w*|nationality|immigra\w*|elderly|retire[de]?|gay|lesbian|transgender)\b/i;
+
 function typing(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   if (!el) return false;
@@ -67,6 +69,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
   const [busy, setBusy] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [showKeys, setShowKeys] = useState(false);
+  const [nudge, setNudge] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const unsent = useRef(0);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -419,7 +422,10 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
         ) : event.status === "failed" || event.status === "processing" || event.status === "extracting" ? (
           <ErrorNote className="mt-3" message={event.status === "failed" ? event.error ?? "Processing failed. Retry it from the queue." : "This event is still being prepared. Go back to the queue and it will appear when ready."} />
         ) : (
-          <div data-tour="checks" className="mt-3 flex w-fit flex-wrap gap-x-5 gap-y-2">
+          <div data-tour="checks" id="verify-checks" className={cx("mt-3 flex w-fit flex-wrap items-center gap-x-5 gap-y-2 rounded-lg px-2 py-1.5 -ml-2", nudge && "flash ring-2 ring-warn")}>
+            <span className={cx("text-[13px] font-semibold", checksDone ? "text-ok" : "text-ink")}>
+              Confirm before you submit ({CHECKS.filter((c) => checks[c.key]).length} of 4)
+            </span>
             {CHECKS.map((c) => (
               <label key={c.key} className="flex items-center gap-2 text-[13px]" title={c.help}>
                 <input type="checkbox" className="h-4 w-4 accent-[#177245]" checked={!!checks[c.key]} onChange={(e) => setCheck(c.key, e.target.checked)} />
@@ -600,6 +606,11 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                             {f.origin === "va" ? <Badge tone="dark">Added by you</Badge> : f.change_type === "changed" ? <Badge tone="warn" className="!whitespace-normal">Changed{f.changed_from ? ` from ${f.changed_from}` : ""}</Badge> : <Badge>New</Badge>}
                             {conf ? <Badge tone={conf.tone}>{conf.text}</Badge> : null}
                             {done ? <Badge tone={VERDICT_TONE[f.verdict]}>{VERDICT_LABEL[f.verdict]}</Badge> : null}
+                            {f.verdict !== "declined" && PROTECTED.test(f.statement) ? (
+                              <span title="This wording may describe a protected characteristic such as family status, age, religion, disability, or military status. Rewrite it as a property requirement, or decline it.">
+                                <Badge tone="bad">Fair housing: reword or decline</Badge>
+                              </span>
+                            ) : null}
                           </div>
 
                           {editing ? (
@@ -722,8 +733,23 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
               <Button icon={<Flag className="h-4 w-4" />} onClick={() => setEscalate("")}>
                 Escalate
               </Button>
-              <Button data-tour="submit" variant="primary" disabled={pending > 0 || !checksDone} onClick={() => setConfirm(true)} title={pending > 0 ? "Decide every item first" : !checksDone ? "Confirm all four checks first" : undefined}>
-                {pending > 0 ? `Submit (${pending} unresolved)` : !checksDone ? "Submit (checks missing)" : "Submit"}
+              <Button
+                data-tour="submit"
+                variant="primary"
+                disabled={pending > 0}
+                className={!checksDone && pending === 0 ? "opacity-60" : undefined}
+                title={pending > 0 ? "Decide every item first" : !checksDone ? "Tick the four checks at the top of the page first" : undefined}
+                onClick={() => {
+                  if (!checksDone) {
+                    setNudge(true);
+                    window.setTimeout(() => setNudge(false), 2200);
+                    toast("Almost there. Tick the four checkboxes at the top of the page, then submit.", { tone: "error" });
+                    return;
+                  }
+                  setConfirm(true);
+                }}
+              >
+                {pending > 0 ? `Submit (${pending} unresolved)` : !checksDone ? `Submit (tick ${4 - CHECKS.filter((c) => checks[c.key]).length} more ${4 - CHECKS.filter((c) => checks[c.key]).length === 1 ? "check" : "checks"} above)` : "Submit"}
               </Button>
             </div>
           ) : null}
