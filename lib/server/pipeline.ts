@@ -178,7 +178,8 @@ export async function getTranscription(id: string): Promise<SttResult> {
 /* LLM (OpenRouter)                                                    */
 /* ------------------------------------------------------------------ */
 
-const DEFAULT_MODELS = ["google/gemini-2.5-flash", "openai/gpt-4o-mini"];
+// Chosen from a side by side run on real pilot transcripts (Nov 2026). Override with OPENROUTER_MODEL.
+const DEFAULT_MODELS = ["anthropic/claude-haiku-5.5", "google/gemini-2.5-flash"];
 
 type ChatContent = string | ({ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } })[];
 
