@@ -1042,6 +1042,8 @@ export const handlers: Record<string, Handler> = {
     const supersededIds = accepted.map((f) => f.supersedes_id).filter(Boolean);
     if (supersededIds.length) {
       q(await db().from("facts").update({ resolved_at: now }).in("id", supersededIds).select("id"));
+      // A suggestion that came from a fact which is no longer true should not stay in the agent's list.
+      q(await db().from("tasks").update({ status: "dismissed" }).in("origin_fact_id", supersededIds).eq("status", "suggested").select("id"));
     }
 
     const withTask = accepted.filter((f) => f.suggested_task && (f.section === "questions" || f.section === "next_steps"));

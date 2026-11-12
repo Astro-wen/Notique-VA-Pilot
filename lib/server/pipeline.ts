@@ -259,7 +259,7 @@ A human verifies every candidate against the transcript before the agent sees an
 Return one JSON object with this exact shape:
 {
   "summary": "two or three plain sentences on what happened in this event",
-  "speakers": { "<speaker label as it appears>": "<real name or role if the transcript makes it clear, otherwise omit>" },
+  "speakers": { "<generic label such as Speaker A>": "<the person's real name, only when the transcript makes it clear; omit labels that are already names>" },
   "facts": [
     {
       "section": "decisions" | "budget" | "needs" | "questions" | "risks" | "next_steps",
@@ -267,7 +267,7 @@ Return one JSON object with this exact shape:
       "lines": [<line numbers that directly support the statement>],
       "confidence": <number from 0 to 1>,
       "change_type": "new" | "changed",
-      "changed_from": "<the earlier value in a few words, only when change_type is changed>",
+      "changed_from": "<the earlier value only, at most five words, such as $900,000 or two bedrooms; omit when the change is not a value>",
       "supersedes_id": "<id of the earlier verified fact this replaces, only when one is listed and clearly replaced>",
       "follow_up_date": "<YYYY-MM-DD only if the conversation names a date by which something should be followed up>",
       "follow_up_condition": "<the condition the client said they are waiting on, in a few words, if any>",
@@ -289,7 +289,8 @@ Rules:
 2. Keep amounts, dates, addresses, and conditions exactly as said. Keep qualifiers such as "if", "unless", "about".
 3. Do not infer financial ability, intent, or personal characteristics that were not said. Never record anything about race, religion, national origin, disability, family status, or other protected characteristics as a preference.
 4. Use change_type "changed" only when the transcript itself or the earlier verified facts show a different earlier value.
-5. Lower the confidence when the audio seems garbled, the speaker is unclear, or the number might belong to another topic. Below 0.6 means the assistant should double check.
+5. Calibrate confidence honestly. Use 0.9 or above only when a speaker states the fact directly and unambiguously. Use 0.7 to 0.85 when you combined two lines, paraphrased loosely, or resolved a pronoun or a spoken number. Use 0.4 to 0.6 when the wording is hedged ("might", "maybe", "not decided"), the speaker is unclear, or a number might belong to another topic. Do not give every fact the same score.
+9. Record only what an agent would need to move this deal forward. Skip small talk, compliments, and general impressions. Do not record the same point twice in different sections; pick the best section. Most conversations yield 3 to 8 facts.
 6. Include suggested_task only for questions and next_steps where a remote assistant could do the work from documents and online research, such as finding listings, building a comparison, preparing a brief, or drafting a follow-up for the agent to send. The assistant never phones or messages the client or third parties. Omit suggested_task otherwise.
 7. Omit optional fields that do not apply. Do not add commentary outside the JSON.
 8. If the event contains nothing relevant, return an empty facts array.`;
@@ -351,7 +352,7 @@ ${transcript}`;
       lineIdx: unique,
       confidence: Number.isFinite(conf) ? Math.min(1, Math.max(0, conf)) : 0.5,
       change_type: changed ? "changed" : "new",
-      changed_from: changed && typeof f.changed_from === "string" ? f.changed_from.slice(0, 120) : null,
+      changed_from: changed && typeof f.changed_from === "string" && f.changed_from.trim() && f.changed_from.trim().length <= 40 ? f.changed_from.trim() : null,
       supersedes_id: changed ? supersedes : null,
       follow_up_date: date,
       follow_up_condition:
@@ -373,7 +374,8 @@ ${transcript}`;
   const speakers: Record<string, string> = {};
   if (raw?.speakers && typeof raw.speakers === "object") {
     for (const [k, v] of Object.entries(raw.speakers as Record<string, unknown>)) {
-      if (typeof v === "string" && v.trim() && v.trim() !== k) speakers[k] = v.trim().slice(0, 40);
+      // Only rename generic labels. A label that is already a name must not be replaced by a role.
+      if (typeof v === "string" && v.trim() && v.trim() !== k && /^(speaker|note|me|unknown|client|agent)\b/i.test(k) && !/^(speaker|unknown)\b/i.test(v.trim())) speakers[k] = v.trim().slice(0, 40);
     }
   }
   return {

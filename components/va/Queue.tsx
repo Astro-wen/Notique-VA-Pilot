@@ -154,7 +154,7 @@ export function Queue({ nav }: { nav: VaNav }) {
           <Empty
             icon={<Clock className="h-5 w-5" />}
             title="Nothing to verify right now"
-            body={data.processing.length ? "New uploads are still being prepared. They will appear here on their own." : "When the agent records or uploads a conversation it appears here. You can also add one yourself."}
+            body={data.processing.some((e) => e.status === "processing" || e.status === "extracting") ? "New uploads are still being prepared. They will appear here on their own." : "When the agent records or uploads a conversation it appears here. You can also add one yourself."}
             action={<Button onClick={() => setAdd("audio")}>Add conversation</Button>}
           />
         ) : (

@@ -205,6 +205,22 @@ export function ProjectView({ nav, projectId, tab, taskId }: { nav: VaNav; proje
   const toast = useToast();
   const { data, error, loading, reload } = useLoad(() => rpc<ProjectDetail>("getProject", { project_id: projectId }), [projectId], { refreshMs: 30000 });
   const [dialog, setDialog] = useState<"edit" | "share" | "add" | "ticket" | null>(null);
+  const working = (data?.events ?? []).some((e) => e.status === "processing" || e.status === "extracting");
+  useEffect(() => {
+    if (!working) return;
+    const id = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      rpc<{ changed: boolean }>("pollProject", { project_id: projectId })
+        .then((r) => {
+          if (r.changed) {
+            reload(true);
+            nav.refreshCounts();
+          }
+        })
+        .catch(() => {});
+    }, 8000);
+    return () => window.clearInterval(id);
+  }, [working, projectId, reload, nav]);
   if (error && !data) return <ErrorNote message={error} onRetry={() => reload()} />;
   if (loading && !data) return <Spinner />;
   if (!data) return null;

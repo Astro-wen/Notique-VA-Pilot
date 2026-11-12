@@ -596,7 +596,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                           className={cx("rounded-xl border bg-white p-3.5 transition-shadow", focused ? "border-accent shadow-[0_0_0_3px_rgba(75,117,242,0.15)]" : "border-line", done && !editing && f.verdict === "declined" && "opacity-60")}
                         >
                           <div className="flex flex-wrap items-center gap-1.5">
-                            {f.origin === "va" ? <Badge tone="dark">Added by you</Badge> : f.change_type === "changed" ? <Badge tone="warn">Changed{f.changed_from ? ` from ${f.changed_from}` : ""}</Badge> : <Badge>New</Badge>}
+                            {f.origin === "va" ? <Badge tone="dark">Added by you</Badge> : f.change_type === "changed" ? <Badge tone="warn" className="!whitespace-normal">Changed{f.changed_from ? ` from ${f.changed_from}` : ""}</Badge> : <Badge>New</Badge>}
                             {conf ? <Badge tone={conf.tone}>{conf.text}</Badge> : null}
                             {done ? <Badge tone={VERDICT_TONE[f.verdict]}>{VERDICT_LABEL[f.verdict]}</Badge> : null}
                           </div>
@@ -646,9 +646,8 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                               {f.verdict === "edited" && f.ai_statement && f.ai_statement !== f.statement ? <p className="mt-1 text-xs text-ink-3">AI draft: {f.ai_statement}</p> : null}
                               {f.follow_up_date || f.follow_up_condition ? (
                                 <p className="mt-1.5 text-[13px] text-ink-2">
-                                  Follow up {f.follow_up_date ? `on ${plainDate(f.follow_up_date)}` : ""}
-                                  {f.follow_up_date && f.follow_up_condition ? ", or " : ""}
-                                  {f.follow_up_condition ? `when ${f.follow_up_condition}` : ""}
+                                  Follow up{f.follow_up_date ? ` on ${plainDate(f.follow_up_date)}` : ""}
+                                  {f.follow_up_condition ? `${f.follow_up_date ? ", or once: " : ": "}${f.follow_up_condition}` : ""}
                                 </p>
                               ) : null}
                               <div className="mt-2.5 space-y-1.5">

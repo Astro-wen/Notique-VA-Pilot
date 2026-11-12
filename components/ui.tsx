@@ -54,7 +54,7 @@ export function Badge({ tone = "neutral", children, className }: { tone?: Tone; 
     bad: "bg-bad-soft text-bad",
     dark: "bg-ink text-white",
   };
-  return <span className={cx("inline-flex h-[22px] items-center gap-1 rounded-full px-2 text-xs font-medium whitespace-nowrap", tones[tone], className)}>{children}</span>;
+  return <span className={cx("inline-flex min-h-[22px] max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap", tones[tone], className)}>{children}</span>;
 }
 
 export function Kbd({ children }: { children: React.ReactNode }) {

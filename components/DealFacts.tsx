@@ -13,16 +13,15 @@ export function FactRow({ fact, tz, action }: { fact: Fact; tz?: string; action?
         <div className="min-w-0 flex-1">
           <p className="text-[15px] font-medium leading-snug">{fact.statement}</p>
           {fact.change_type === "changed" ? (
-            <Badge tone="warn" className="mt-1.5">
+            <Badge tone="warn" className="mt-1.5 !whitespace-normal">
               Changed{fact.changed_from ? ` from ${fact.changed_from}` : ""}
             </Badge>
           ) : null}
           {fact.follow_up_date || fact.follow_up_condition ? (
             <p className="mt-1.5 flex items-center gap-1.5 text-[13px] text-ink-2">
               <CalendarClock className="h-3.5 w-3.5 text-ink-3" />
-              Follow up {fact.follow_up_date ? `on ${plainDate(fact.follow_up_date)}` : ""}
-              {fact.follow_up_date && fact.follow_up_condition ? ", or " : ""}
-              {fact.follow_up_condition ? `when ${fact.follow_up_condition}` : ""}
+              Follow up{fact.follow_up_date ? ` on ${plainDate(fact.follow_up_date)}` : ""}
+              {fact.follow_up_condition ? `${fact.follow_up_date ? ", or once: " : ": "}${fact.follow_up_condition}` : ""}
             </p>
           ) : null}
         </div>
