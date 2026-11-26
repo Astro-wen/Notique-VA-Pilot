@@ -49,6 +49,54 @@ function toDraft(f: Fact): Draft {
   };
 }
 
+const OPEN_LABEL: Record<string, string> = { questions: "Open question", risks: "Concern", next_steps: "Next step" };
+
+/**
+ * Earlier open questions, concerns and next steps for this client. The VA ticks the ones this
+ * conversation answers or makes no longer true; Submit retires them and withdraws their suggestions.
+ */
+function SettlesPanel({ items, settles, readOnly, onChange }: { items: NonNullable<EventDetail["openItems"]>; settles: string[]; readOnly: boolean; onChange: (next: string[]) => void }) {
+  const picked = new Set(settles);
+  const [open, setOpen] = useState(settles.length > 0);
+  return (
+    <section className="mt-5 rounded-xl border border-line bg-white">
+      <button className="flex w-full items-center gap-2 px-4 py-3 text-left" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <span className="flex-1">
+          <span className="block text-[13px] font-semibold">Does this conversation settle anything from before?</span>
+          <span className="block text-xs text-ink-3">
+            {picked.size ? `${picked.size} earlier ${picked.size === 1 ? "item" : "items"} will be marked answered when you submit.` : `${items.length} earlier open ${items.length === 1 ? "item" : "items"} for this client. Tick the ones this conversation answers.`}
+          </span>
+        </span>
+        <span className="text-xs text-accent">{open ? "Hide" : "Show"}</span>
+      </button>
+      {open ? (
+        <ul className="divide-y divide-line border-t border-line">
+          {items.map((it) => (
+            <li key={it.id}>
+              <label className={cx("flex items-start gap-3 px-4 py-2.5 text-[13px]", readOnly ? "" : "cursor-pointer hover:bg-page")}>
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-[#177245]"
+                  checked={picked.has(it.id)}
+                  disabled={readOnly}
+                  onChange={(e) => onChange(e.target.checked ? [...settles, it.id] : settles.filter((x) => x !== it.id))}
+                />
+                <span className="min-w-0">
+                  <span className={cx("block", picked.has(it.id) ? "text-ink-3 line-through" : "text-ink")}>{it.statement}</span>
+                  <span className="block text-xs text-ink-3">
+                    {OPEN_LABEL[it.section] ?? it.section}
+                    {it.event_title ? `, from ${it.event_title}` : ""}
+                  </span>
+                </span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  );
+}
+
 export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
   const toast = useToast();
   const [detail, setDetail] = useState<EventDetail | null>(null);
@@ -73,6 +121,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
   // The browser's own Back or a trackpad swipe must not drop an open edit either.
   useBackGuard(!!editId || summaryDraft !== null || !!adding, () => toast("You have an edit open. Save it or cancel it before leaving.", { tone: "error" }));
   const checkQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const settleQueue = useRef<Promise<unknown>>(Promise.resolve());
   const saving = useRef<Record<string, Promise<boolean>>>({});
   const audioRef = useRef<HTMLAudioElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -856,6 +905,22 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                 </div>
               );
             })}
+            {detail.openItems?.length ? (
+              <SettlesPanel
+                items={detail.openItems}
+                settles={event.settles ?? []}
+                readOnly={readOnly}
+                onChange={(next) => {
+                  setDetail((d) => (d ? { ...d, event: { ...d.event, settles: next } } : d));
+                  settleQueue.current = settleQueue.current.then(() =>
+                    rpc("updateEventMeta", { event_id: eventId, settles: next }).catch((err) => {
+                      toast((err as Error).message, { tone: "error" });
+                      load();
+                    }),
+                  );
+                }}
+              />
+            ) : null}
           </div>
 
           {!readOnly ? (
@@ -928,6 +993,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
             ["Declined and discarded", counts.declined],
             ["Waiting for the user to confirm", counts.insufficient],
             ["Requests suggested to the user", counts.tasks],
+            ["Earlier items marked answered", event.settles?.length ?? 0],
           ].map(([label, value]) => (
             <div key={label as string} className="flex justify-between px-3 py-2">
               <dt className="text-ink-2">{label}</dt>

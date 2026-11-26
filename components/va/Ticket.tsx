@@ -5,7 +5,7 @@ import { rpc, uploadFile } from "@/lib/client/api";
 import { CHANNEL_LABEL, FEEDBACK_LABEL, TASK_STATUS_LABEL, clock, dateOnly, dateTime, remaining, taskNo, toLocalInput, tzAbbr } from "@/lib/client/format";
 import { TASK_CATEGORIES, type Task, type TaskDetail, type TaskStatus } from "@/lib/types";
 import { AddFile, FileItem } from "../FileList";
-import { TaskThread } from "../TaskThread";
+import { TaskThread, Linked } from "../TaskThread";
 import { Badge, Button, ErrorNote, Field, Input, Modal, Select, Spinner, Textarea, useLoad, useNow, useToast, type Tone } from "../ui";
 import type { VaNav } from "./Console";
 import { Coach, TOURS } from "../Coach";
@@ -187,7 +187,9 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
           ) : null}
         </div>
         <h2 className="mt-2 break-words text-lg font-semibold [overflow-wrap:anywhere]">{task.title}</h2>
-        <p className="mt-1 whitespace-pre-wrap break-words text-sm text-ink-2 [overflow-wrap:anywhere]">{task.description}</p>
+        <p className="mt-1 whitespace-pre-wrap break-words text-sm text-ink-2 [overflow-wrap:anywhere]">
+              <Linked text={task.description} />
+            </p>
         {task.origin_event_title ? <p className="mt-1 text-xs text-ink-3">Came out of: {task.origin_event_title}</p> : null}
       </div>
 

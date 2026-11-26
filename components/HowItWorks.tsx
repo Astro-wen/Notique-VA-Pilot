@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cx } from "./ui";
 
 const ACC = "#3b6cf0";
@@ -158,6 +158,14 @@ const DAILY: { title: string; lane: Lane; planned?: boolean; lines: string[]; de
 export function HowItWorks({ role }: { role: "agent" | "va" | "admin" }) {
   const [stage, setStage] = useState<number | null>(null);
   const [daily, setDaily] = useState<number | null>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+  // On a narrow screen the diagram scrolls sideways: bring the chosen step into view.
+  useEffect(() => {
+    const box = scroller.current;
+    if (stage === null || !box || box.scrollWidth <= box.clientWidth) return;
+    const scale = box.scrollWidth / W;
+    box.scrollTo({ left: Math.max(0, (bx(stage) - 40) * scale), behavior: "smooth" });
+  }, [stage]);
   const lit = (stages: number[]) => stage === null || stages.includes(stage);
   const info = stage !== null ? STAGES[stage] : null;
   const href = info ? (role === "agent" ? info.userHref : info.vaHref) : undefined;
@@ -190,7 +198,7 @@ export function HowItWorks({ role }: { role: "agent" | "va" | "admin" }) {
         )}
       </div>
 
-      <div className="mt-3 overflow-x-auto rounded-xl border border-line bg-white p-2">
+      <div ref={scroller} className="mt-3 overflow-x-auto rounded-xl border border-line bg-white p-2">
         <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full min-w-[1040px] text-ink" role="img" aria-label="How Notique works: the user adds a conversation, AI drafts the facts, the VA checks them and submits, the user asks for help, AI writes a first draft, the VA does the work and delivers it, and the user reviews and sends it.">
           <defs>
             <marker id="hw-n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">

@@ -64,6 +64,8 @@ export interface EventRow {
   summary: string | null;
   checks: EventChecks;
   speaker_map: Record<string, string>;
+  /** Earlier open items this conversation settles; resolved on submit. */
+  settles?: string[];
   review_ms: number;
   escalation_note: string | null;
   submitted_at: string | null;
@@ -266,6 +268,8 @@ export interface EventDetail {
   audioUrl: string | null;
   position: { index: number; total: number };
   canReopen: boolean;
+  /** The client's earlier open questions, risks and next steps, so the VA can mark the ones this conversation settles. */
+  openItems?: { id: string; section: Section; statement: string; event_title: string }[];
 }
 
 export type WatchStatus = "active" | "met" | "paused" | "closed";

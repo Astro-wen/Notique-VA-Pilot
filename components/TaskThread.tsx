@@ -8,7 +8,7 @@ import { Button, Select, Textarea, composing, cx, useToast } from "./ui";
 import { useSession } from "./Session";
 
 /** Message text with web addresses turned into links that open in a new tab. */
-function Linked({ text, dark }: { text: string; dark: boolean }) {
+export function Linked({ text, dark = false }: { text: string; dark?: boolean }) {
   const parts = text.split(/((?:https?:\/\/|www\.)[^\s<>()]+[^\s<>().,;:!?'"])/g);
   return (
     <>

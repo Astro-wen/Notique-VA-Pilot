@@ -4,7 +4,7 @@ import { rpc } from "@/lib/client/api";
 import { FEEDBACK_LABEL, dateTime, remaining, taskNo } from "@/lib/client/format";
 import { TASK_CATEGORIES, type Task, type TaskDetail } from "@/lib/types";
 import { AddFile, FileItem, TextPreview, isShortText } from "../FileList";
-import { TaskThread } from "../TaskThread";
+import { TaskThread, Linked } from "../TaskThread";
 import { Badge, Button, ErrorNote, Field, Input, Modal, Select, Spinner, Textarea, useLoad, useToast, type Tone } from "../ui";
 
 export const AGENT_STATUS: Record<string, { label: string; tone: Tone }> = {
@@ -184,7 +184,9 @@ export function TaskCard({ taskId, vaName, tz, preview, startEditing, onClose, o
               ) : null}
             </div>
             <h3 className="mt-2 text-lg font-semibold">{task.title}</h3>
-            <p className="mt-1 whitespace-pre-wrap break-words text-sm text-ink-2 [overflow-wrap:anywhere]">{task.description}</p>
+            <p className="mt-1 whitespace-pre-wrap break-words text-sm text-ink-2 [overflow-wrap:anywhere]">
+              <Linked text={task.description} />
+            </p>
             {canEdit || canCancel ? (
               <div className="mt-3 flex gap-2">
                 {canEdit ? (
@@ -277,7 +279,11 @@ export function TaskCard({ taskId, vaName, tz, preview, startEditing, onClose, o
 
       <TaskFormDialog
         open={edit}
-        onClose={() => setEdit(false)}
+        onClose={() => {
+          setEdit(false);
+          // Opened straight into the editor from a suggestion's Edit: Cancel goes back to the list, not to the card.
+          if (startEditing) onClose();
+        }}
         projectId={task?.project_id ?? ""}
         task={task}
         onSaved={() => {
@@ -298,7 +304,7 @@ export function TaskCard({ taskId, vaName, tz, preview, startEditing, onClose, o
           </>
         }
       >
-        <p className="text-sm text-ink-2">{vaName} stops working on it. Time already spent still counts.</p>
+        <p className="text-sm text-ink-2">{vaName} stops working on it. Anything already delivered stays in Files.</p>
       </Modal>
       <Modal
         open={revision !== null}

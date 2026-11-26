@@ -14,7 +14,7 @@ export function FactRow({ fact, tz, action }: { fact: Fact; tz?: string; action?
           <p className="text-[15px] font-medium leading-snug">{fact.statement}</p>
           {fact.change_type === "changed" ? (
             <Badge tone="warn" className="mt-1.5 !whitespace-normal">
-              Changed{fact.changed_from ? ` from ${fact.changed_from}` : ""}
+              {fact.changed_from ? `Changed from ${fact.changed_from}` : "Updated"}
             </Badge>
           ) : null}
           {fact.follow_up_date || fact.follow_up_condition ? (

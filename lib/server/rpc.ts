@@ -211,7 +211,29 @@ function stripEvent(e: any, forAgent = false): EventRow {
   void _r; void _s; void _p; void _b; void _c;
   if (!forAgent) return rest as EventRow;
   // Agents only get what a VA has verified. The AI summary and internal review data stay on the VA side.
-  return { ...rest, summary: rest.status === "submitted" ? rest.summary : null, checks: {}, review_ms: 0, escalation_note: null, audio_path: null, speaker_map: {}, error: rest.status === "failed" ? rest.error : null } as EventRow;
+  return { ...rest, settles: [], summary: rest.status === "submitted" ? rest.summary : null, checks: {}, review_ms: 0, escalation_note: null, audio_path: null, speaker_map: {}, error: rest.status === "failed" ? rest.error : null } as EventRow;
+}
+
+/**
+ * The client's earlier open questions, risks and next steps that are still current, plus any this
+ * conversation already settles, so the VA can tick the ones it answers.
+ */
+async function openItemsFor(event: any): Promise<NonNullable<EventDetail["openItems"]>> {
+  const settles: string[] = Array.isArray(event.settles) ? event.settles : [];
+  const submitted = q(await db().from("events").select("id,title").eq("project_id", event.project_id).eq("status", "submitted").neq("id", event.id)) as { id: string; title: string }[];
+  if (submitted.length === 0) return [];
+  const titles = Object.fromEntries(submitted.map((e) => [e.id, e.title]));
+  const rows = q(
+    await db()
+      .from("facts")
+      .select("id,section,statement,event_id,resolved_at")
+      .in("event_id", submitted.map((e) => e.id))
+      .in("section", ["questions", "risks", "next_steps"])
+      .in("verdict", ["approved", "edited"])
+      .order("created_at", { ascending: false })
+      .limit(80),
+  ) as { id: string; section: Section; statement: string; event_id: string; resolved_at: string | null }[];
+  return rows.filter((r) => !r.resolved_at || settles.includes(r.id)).map((r) => ({ id: r.id, section: r.section, statement: r.statement, event_title: titles[r.event_id] ?? "" }));
 }
 
 async function fetchLines(eventId: string): Promise<any[]> {
@@ -320,7 +342,7 @@ async function runExtraction(eventId: string) {
   q(
     await db()
       .from("events")
-      .update({ status: "ready", status_changed_at: new Date().toISOString(), summary: result.summary || null, speaker_map: speakerMap, error: null })
+      .update({ status: "ready", status_changed_at: new Date().toISOString(), summary: result.summary || null, speaker_map: speakerMap, error: null, ...(result.settles.length ? { settles: result.settles } : {}) })
       .eq("id", eventId)
       .eq("status", "extracting")
       .select("id"),
@@ -1555,6 +1577,7 @@ export const handlers: Record<string, Handler> = {
       }
     }
     const canReopen = event.status === "submitted" && !!event.submitted_at && Date.now() - new Date(event.submitted_at).getTime() < 24 * 3600 * 1000;
+    const openItems = await openItemsFor(event);
     return {
       event: { ...stripEvent(event), review_ms: Number(event.review_ms) },
       project,
@@ -1563,6 +1586,7 @@ export const handlers: Record<string, Handler> = {
       audioUrl,
       position: { index: index === -1 ? 0 : index + 1, total: queue.length },
       canReopen,
+      openItems,
     };
   },
 
@@ -1571,7 +1595,7 @@ export const handlers: Record<string, Handler> = {
     const event = await loadEvent(p, args.event_id);
     const patch: Record<string, unknown> = {};
     const locked = event.status === "submitted";
-    if (locked && (args.checks || args.speaker_map || typeof args.title === "string" || typeof args.summary === "string")) {
+    if (locked && (args.checks || args.speaker_map || args.settles || typeof args.title === "string" || typeof args.summary === "string")) {
       throw new RpcError("This conversation was already submitted, so the screen now shows it as read only. Reopen it to make changes.");
     }
     if (args.checks && typeof args.checks === "object") {
@@ -1590,6 +1614,11 @@ export const handlers: Record<string, Handler> = {
     }
     if (typeof args.title === "string") patch.title = str(args.title, "Title", 120);
     if (typeof args.summary === "string") patch.summary = args.summary.trim().slice(0, 800) || null;
+    if (Array.isArray(args.settles)) {
+      // The screen sends the whole set it shows; only the client's current open items are accepted.
+      const allowed = new Set((await openItemsFor(event)).map((i) => i.id));
+      patch.settles = Array.from(new Set((args.settles as unknown[]).filter((x): x is string => typeof x === "string" && allowed.has(x)))).slice(0, 50);
+    }
     if (Number.isFinite(Number(args.add_ms)) && Number(args.add_ms) > 0 && event.status !== "submitted") {
       patch.review_ms = Number(event.review_ms) + Math.min(Number(args.add_ms), 120000);
     }
@@ -1750,7 +1779,7 @@ export const handlers: Record<string, Handler> = {
       if (pending) throw new RpcError("An item changed while you were submitting. Check the list and submit again.", 409);
       const accepted = facts.filter((f) => f.verdict === "approved" || f.verdict === "edited");
 
-      const supersededIds = accepted.map((f) => f.supersedes_id).filter(Boolean);
+      const supersededIds = Array.from(new Set([...accepted.map((f) => f.supersedes_id).filter(Boolean), ...(Array.isArray(event.settles) ? event.settles : [])]));
       if (supersededIds.length) {
         // Only the facts and suggestions this submit actually changes are recorded, so a reopen can put back exactly those.
         const r = q(await db().from("facts").update({ resolved_at: now }).in("id", supersededIds).is("resolved_at", null).select("id")) as { id: string }[];
@@ -1993,7 +2022,7 @@ export const handlers: Record<string, Handler> = {
   async sendTaskMessage(ctx, args): Promise<TaskDetail["messages"][number]> {
     const p = me(ctx);
     const task = await loadTask(p, args.task_id);
-    if (["cancelled", "dismissed", "suggested"].includes(task.status)) throw new RpcError(task.status === "suggested" ? "Send this request first, then you can message about it." : `This request was ${task.status}, so messages are closed.`, 409);
+    if (["cancelled", "dismissed", "suggested"].includes(task.status)) throw new RpcError(task.status === "suggested" ? "Send this request first, then you can message about it." : `This was ${task.status === "dismissed" ? "dismissed" : "cancelled"}, so messages are closed.`, 409);
     const body = str(args.body, "Message", 4000);
     const staffUser = isStaff(p);
     const onBehalf = staffUser && args.as_agent === true;

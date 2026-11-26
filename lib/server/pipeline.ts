@@ -268,6 +268,8 @@ export interface Extraction {
   facts: ExtractedFact[];
   summary: string;
   speakers: Record<string, string>;
+  /** Earlier open items this conversation answers or makes no longer true. */
+  settles: string[];
 }
 
 const SECTION_KEYS: Section[] = ["decisions", "budget", "needs", "questions", "risks", "next_steps"];
@@ -279,6 +281,7 @@ A human verifies every candidate against the transcript before the agent sees an
 Return one JSON object with this exact shape:
 {
   "summary": "two or three plain sentences on what happened in this event",
+  "settles": ["<id of every earlier open question, risk, or next step that this conversation answers, completes, or makes no longer true>"],
   "speakers": { "<generic label such as Speaker A>": "<the person's real name, only when the transcript makes it clear; omit labels that are already names>" },
   "facts": [
     {
@@ -315,7 +318,8 @@ Rules:
 6. Include suggested_task only for questions and next_steps where a remote assistant could do the work from documents and online research, such as finding listings, building a comparison, preparing a brief, or drafting a follow-up for the agent to send. The assistant never phones or messages the client or third parties. Omit suggested_task otherwise. The agent reads suggested_task and sends it to the assistant with one tap, so write title and description in the agent's own voice as an instruction to the assistant ("Draft a follow-up email to Michael about...", "Find out whether..."), never "the agent" in the third person, and do not repeat a date that will already have passed.
 7. Omit optional fields that do not apply. Do not add commentary outside the JSON.
 11. The agent reads every fact. Refer to the agent by the first name given above, never as "the agent", for example "Sarah will send three comparable sales this week".
-12. When this conversation settles, answers, or replaces an earlier verified fact, set supersedes_id on the new fact to that earlier fact's id, so the old line is retired and the agent never sees two versions side by side. This covers: an offer amount or plan that changed; a decision that was reversed; an open question that now has an answer; a risk that turned out not to be one. An answer is never itself an open question: file it where it belongs (a decision, budget, needs, or a risk that remains) and point supersedes_id at the question it answers. Example: earlier question "Are the solar panels owned or leased?" and earlier risk "The solar panels may be leased"; the client now says they are owned, so write a decision "The solar panels are owned and come with the house" with supersedes_id set to the risk or question it settles (pick the one it most directly replaces). Use each earlier id at most once.
+12. When this conversation settles, answers, or replaces an earlier verified fact, set supersedes_id on the new fact to that earlier fact's id, so the old line is retired and the agent never sees two versions side by side. This covers: an offer amount or plan that changed; a decision that was reversed; an open question that now has an answer; a risk that turned out not to be one. An answer is never itself an open question: file it where it belongs (a decision, budget, needs, or a risk that remains) and point supersedes_id at the question it answers. Example: earlier question "Are the solar panels owned or leased?" and earlier risk "The solar panels may be leased"; the client now says they are owned, so write a decision "The solar panels are owned and come with the house" with supersedes_id set to the risk or question it settles (pick the one it most directly replaces). Use each earlier id at most once as supersedes_id.
+14. Also list in "settles" every earlier open question, risk, or next step (by id) that this conversation answers, completes, or shows is no longer a concern, including the ones you already used as supersedes_id. Examples: the question "Which high school is Maple assigned to?" is settled once the school is named; the risk "solar panels may be leased" is settled once they are confirmed owned; the next step "Jenny will email the lender for a new pre-approval" is settled once the letter was sent. Good news is not a risk: write it as a decision ("Confirmed: no special assessment is planned") and settle the old risk. Leave "settles" empty when nothing earlier is settled.
 13. Do not put a suggested_task on a fact when the same work is already in the list of requested or suggested work above.
 8. If the event contains nothing relevant, return an empty facts array.`;
 
@@ -412,10 +416,12 @@ ${transcript}`;
       if (typeof v === "string" && v.trim() && v.trim() !== k && /^(speaker|note|me|unknown|client|agent)\b/i.test(k) && !/^(speaker|unknown)\b/i.test(v.trim())) speakers[k] = v.trim().slice(0, 40);
     }
   }
+  const settles = Array.isArray(raw?.settles) ? Array.from(new Set((raw.settles as unknown[]).filter((x): x is string => typeof x === "string" && priorIds.has(x)))).slice(0, 30) : [];
   return {
     facts: facts.slice(0, 40),
     summary: typeof raw?.summary === "string" ? raw.summary.trim().slice(0, 600) : "",
     speakers,
+    settles,
   };
 }
 

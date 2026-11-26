@@ -232,14 +232,15 @@ function installTracker() {
   if (trackerInstalled || typeof window === "undefined") return;
   trackerInstalled = true;
   mirror = { state: window.history.state, href: window.location.href };
-  for (const method of ["pushState", "replaceState"] as const) {
-    const original = window.history[method].bind(window.history);
-    window.history[method] = function (data: unknown, unused: string, url?: string | URL | null) {
-      original(data, unused, url);
-      mirror = { state: window.history.state, href: window.location.href };
-    };
-  }
-  window.addEventListener("popstate", handlePopState);
+  // Only real navigations move the mirror. Next.js rewrites the landed entry with replaceState while
+  // handling Back, and counting that would make the entry just arrived at look like the one just left.
+  const original = window.history.pushState.bind(window.history);
+  window.history.pushState = function (data: unknown, unused: string, url?: string | URL | null) {
+    original(data, unused, url);
+    mirror = { state: window.history.state, href: window.location.href };
+  };
+  // Capture, so this runs before the router's own Back handling.
+  window.addEventListener("popstate", handlePopState, true);
 }
 function handlePopState() {
   const departed = mirror;
@@ -277,6 +278,7 @@ function retireEntry(id: number) {
   const rest = { ...window.history.state, notiqueDead: true };
   delete rest.notiqueModal;
   window.history.replaceState(rest, "", window.location.href);
+  mirror = { state: window.history.state, href: window.location.href };
 }
 function handleBeforeUnload(e: BeforeUnloadEvent) {
   if (!backGuards.some((g) => g.hasText())) return;
@@ -441,7 +443,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const counter = useRef(0);
   const push = useCallback((message: string, options?: { tone?: "info" | "error"; action?: Toast["action"] }) => {
     const id = ++counter.current;
-    setToasts((list) => [...list.slice(-2), { id, message, tone: options?.tone ?? "info", action: options?.action }]);
+    // The same message twice in a row (a double tap) shows once.
+    setToasts((list) => (list.some((t) => t.message === message) ? list : [...list.slice(-2), { id, message, tone: options?.tone ?? "info", action: options?.action }]));
     window.setTimeout(() => setToasts((list) => list.filter((t) => t.id !== id)), options?.action ? 8000 : options?.tone === "error" ? 7000 : 3500);
   }, []);
   return (
