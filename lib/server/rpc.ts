@@ -1741,7 +1741,8 @@ export const handlers: Record<string, Handler> = {
       return { ok: true };
     }
     if (task.status !== "suggested") throw new RpcError("Only suggestions can be dismissed.");
-    q(await db().from("tasks").update({ status: "dismissed" }).eq("id", task.id).eq("status", "suggested").select("id"));
+    const gone = q(await db().from("tasks").update({ status: "dismissed" }).eq("id", task.id).eq("status", "suggested").select("id")) as any[];
+    if (gone.length === 0) throw new RpcError("This suggestion was just sent to the assistant, so it was not dismissed.", 409);
     return { ok: true };
   },
 
