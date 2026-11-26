@@ -220,7 +220,7 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
               <Empty
                 icon={<FileText className="h-5 w-5" />}
                 title={data.pendingEvents ? "Verification in progress" : "Nothing added yet"}
-                body={data.pendingEvents ? `${vaName === "your assistant" ? "Your assistant" : vaName} is checking the facts against the transcript. Decisions, changes, and open questions will show here.` : "Add a recording, transcript, or text thread and this page fills in with what was decided and what is still open."}
+                body={data.pendingEvents ? `${vaName === "your assistant" ? "Your assistant" : vaName} is checking what was said. Decisions, changes, and open questions will show here.` : "Add a recording, transcript, or text thread and this page fills in with what was decided and what is still open."}
                 action={!preview && !data.pendingEvents ? <Button onClick={() => setAdd(true)}>Add conversation</Button> : null}
               />
             </Card>
@@ -232,7 +232,28 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
 
       {tab === "timeline" ? (
         <div className="mt-4 space-y-5">
-          {data.events.length === 0 ? (
+          {data.pendingList?.length ? (
+            <div>
+              <div className="mb-2 flex items-center gap-2 text-[13px] font-semibold text-ink-2">
+                <span className="h-2 w-2 rounded-full bg-warn" />
+                Being verified
+              </div>
+              <div className="space-y-2">
+                {data.pendingList.map((e) => (
+                  <Card key={e.id} className="p-3.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium">{e.title}</span>
+                      <Badge tone="warn">Being verified</Badge>
+                    </div>
+                    <p className="mt-1 text-[13px] text-ink-3">
+                      {SOURCE_LABEL[e.source as keyof typeof SOURCE_LABEL] ?? "Conversation"}, {dateOnly(e.occurred_at, tz)}. {e.due_at ? (isPast(e.due_at) ? "Running late." : `Ready by ${dateTime(e.due_at, tz)}.`) : ""}
+                    </p>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {data.events.length === 0 && !data.pendingList?.length ? (
             <Card>
               <Empty title="Nothing on the timeline yet" body="Each verified conversation appears here with its summary and facts." />
             </Card>
@@ -334,16 +355,6 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
               </div>
             </section>
           ) : null}
-          {active.length ? (
-            <section>
-              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-3">Sent to {vaName} ({active.length})</h2>
-              <div className="space-y-2">
-                {active.map((t) => (
-                  <TaskRow key={t.id} task={t} tz={tz} onOpen={() => setTaskId(t.id)} />
-                ))}
-              </div>
-            </section>
-          ) : null}
           {delivered.length ? (
             <section>
               <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-3">Delivered ({delivered.length})</h2>
@@ -352,6 +363,16 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
                   <TaskRow key={t.id} task={t} tz={tz} onOpen={() => setTaskId(t.id)}>
                     {!t.agent_feedback ? <p className="mt-1.5 text-[13px] font-medium text-accent">Ready for your review</p> : null}
                   </TaskRow>
+                ))}
+              </div>
+            </section>
+          ) : null}
+          {active.length ? (
+            <section>
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-3">Sent to {vaName} ({active.length})</h2>
+              <div className="space-y-2">
+                {active.map((t) => (
+                  <TaskRow key={t.id} task={t} tz={tz} onOpen={() => setTaskId(t.id)} />
                 ))}
               </div>
             </section>
@@ -377,7 +398,10 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
                 <div className="space-y-2">
                   {group.rows.length === 0 ? <p className="rounded-xl border border-dashed border-line-strong bg-white px-4 py-5 text-center text-[13px] text-ink-3">{group.empty}</p> : null}
                   {group.rows.map((f) => (
-                    <FileItem key={f.id} file={f} canDelete={!preview && f.kind !== "deliverable" && f.uploaded_role === "agent"} onDeleted={() => reload(true)} />
+                    <div key={f.id}>
+                    {f.task_id && data.tasks.find((t) => t.id === f.task_id) ? <p className="mb-1 text-xs text-ink-3">For: {data.tasks.find((t) => t.id === f.task_id)?.title}</p> : null}
+                    <FileItem file={f} canDelete={!preview && f.kind !== "deliverable" && f.uploaded_role === "agent"} onDeleted={() => reload(true)} />
+                    </div>
                   ))}
                 </div>
               </section>
@@ -413,7 +437,7 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
         onCreated={(e) => {
           if (e.project_id !== projectId) return window.location.assign(`/agent?project=${e.project_id}`);
           reload(true);
-          toast(e.status === "failed" ? `We could not process it: ${e.error}` : "Received. Your assistant will verify it.", e.status === "failed" ? { tone: "error" } : undefined);
+          toast(e.status === "failed" ? `We could not process it: ${e.error}` : "Received. It shows on the Timeline as being verified, with facts by 9:00 AM the next business day.", e.status === "failed" ? { tone: "error" } : undefined);
         }}
       />
     </div>

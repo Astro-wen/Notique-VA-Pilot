@@ -127,7 +127,7 @@ export function TaskThread({ taskId, messages, viewer, otherName, disabled, canA
               <div className="inline-flex rounded-md border border-line p-0.5">
                 {(["send", "log"] as const).map((key) => (
                   <button key={key} onClick={() => setMode(key)} className={cx("h-7 rounded px-2.5", mode === key ? "bg-ink text-white" : "text-ink-2")}>
-                    {key === "send" ? `Message ${otherName}` : "Log user reply"}
+                    {key === "send" ? `Message ${otherName}` : `Log what ${otherName} said`}
                   </button>
                 ))}
               </div>
@@ -156,7 +156,7 @@ export function TaskThread({ taskId, messages, viewer, otherName, disabled, canA
               </Button>
             ) : null}
             <Button size="sm" variant={viewer === "agent" ? "primary" : "outline"} icon={<Send className="h-3.5 w-3.5" />} onClick={() => send(false)} disabled={!body.trim()} busy={busy}>
-              {viewer === "va" && mode === "log" ? "Log reply" : "Send"}
+              {viewer === "va" && mode === "log" ? "Log it" : "Send"}
             </Button>
           </div>
         </div>

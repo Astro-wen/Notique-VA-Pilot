@@ -70,7 +70,7 @@ export function Qc({ nav }: { nav: VaNav }) {
                   <Bar label="Approved as written" value={v.approved} total={aiTotal} />
                   <Bar label="Edited" value={v.edited} total={aiTotal} />
                   <Bar label="Declined" value={v.declined} total={aiTotal} />
-                  <Bar label="Insufficient evidence" value={v.insufficient} total={aiTotal} />
+                  <Bar label="Ask user" value={v.insufficient} total={aiTotal} />
                 </>
               ) : null}
             </Card>

@@ -13,8 +13,28 @@ import { DraftPanel } from "./DraftPanel";
 
 export const STATUS_TONE: Record<TaskStatus, Tone> = { suggested: "neutral", received: "accent", in_progress: "dark", waiting: "warn", delivered: "ok", cancelled: "neutral", dismissed: "neutral" };
 
-export function NewTicketDialog({ open, onClose, projectId, onCreated }: { open: boolean; onClose: () => void; projectId: string; onCreated: (task: Task) => void }) {
+/** Common delivery times in the VA's own clock, so nobody has to fight the date picker. */
+function etaPresets(): { label: string; at: Date }[] {
+  const at = (days: number, hour: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    d.setHours(hour, 0, 0, 0);
+    return d;
+  };
+  const now = new Date();
+  const list = [
+    { label: "Today 5 PM", at: at(0, 17) },
+    { label: "Tomorrow 9 AM", at: at(1, 9) },
+    { label: "Tomorrow 5 PM", at: at(1, 17) },
+    { label: "In 2 days, 5 PM", at: at(2, 17) },
+  ];
+  return list.filter((p) => p.at.getTime() > now.getTime() + 30 * 60 * 1000);
+}
+
+export function NewTicketDialog({ open, onClose, projectId, onCreated, projects, userName }: { open: boolean; onClose: () => void; projectId: string; onCreated: (task: Task) => void; projects?: { id: string; client_name: string }[]; userName?: string }) {
   const toast = useToast();
+  // Opened from Tickets there is no project yet: the VA picks the client.
+  const [pid, setPid] = useState(projectId);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("Research");
@@ -24,6 +44,7 @@ export function NewTicketDialog({ open, onClose, projectId, onCreated }: { open:
   const proofRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (open) {
+      setPid(projectId);
       setProof([]);
       setTitle("");
       setDescription("");
@@ -32,16 +53,17 @@ export function NewTicketDialog({ open, onClose, projectId, onCreated }: { open:
     }
   }, [open]);
   async function save() {
+    if (!pid) return toast("Choose which client this is for.", { tone: "error" });
     if (!title.trim() || !description.trim()) return toast("Add a title and what the user asked for.", { tone: "error" });
     if (!via) return toast("Choose how the user asked for this.", { tone: "error" });
     setBusy(true);
     try {
-      const task = await rpc<Task>("createTask", { project_id: projectId, title, description, category, requested_via: via });
+      const task = await rpc<Task>("createTask", { project_id: pid, title, description, category, requested_via: via });
       let failed = 0;
       for (const file of proof) {
         try {
-          const up = await uploadFile(projectId, file);
-          await rpc("addFile", { project_id: projectId, task_id: task.id, kind: "attachment", name: up.name, path: up.path, size: up.size, mime: up.mime, note: "Proof of request" });
+          const up = await uploadFile(pid, file);
+          await rpc("addFile", { project_id: pid, task_id: task.id, kind: "attachment", name: up.name, path: up.path, size: up.size, mime: up.mime, note: "Proof of request" });
         } catch {
           failed += 1;
         }
@@ -59,7 +81,7 @@ export function NewTicketDialog({ open, onClose, projectId, onCreated }: { open:
     <Modal
       open={open}
       onClose={busy ? () => {} : onClose}
-      title="New ticket for the user"
+      title={`Log a request from ${userName?.split(" ")[0] ?? "the user"}`}
       footer={
         <>
           <Button onClick={onClose} disabled={busy}>
@@ -73,6 +95,19 @@ export function NewTicketDialog({ open, onClose, projectId, onCreated }: { open:
     >
       <p className="text-[13px] text-ink-3">Log every piece of work the user asks for by text, email, or call, so nothing is lost and the deadline is tracked. The user sees this ticket as a request.</p>
       <div className="mt-4 space-y-4">
+        <p className="-mt-1 text-[13px] text-ink-3">Use this when {userName?.split(" ")[0] ?? "the user"} asks for something by text, email or phone, so it is tracked and the deadline counts.</p>
+        {projects ? (
+          <Field label="Client">
+            <Select value={pid} onChange={(e) => setPid(e.target.value)}>
+              <option value="">Choose a client</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.client_name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        ) : null}
         <Field label="Title">
           <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} placeholder="Shortlist 3 bed homes near Lincoln Elementary" />
         </Field>
@@ -221,13 +256,28 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
           </Field>
           <Field label={`ETA (${tzAbbr(Intl.DateTimeFormat().resolvedOptions().timeZone)}, your time)`} hint={task.eta ? `User sees ${dateTime(task.eta, tz, true)}${task.status === "waiting" ? ", while you wait for the user" : etaLeft ? `, ${etaLeft.text.toLowerCase()}` : ""}` : "Set this first. The user sees it right away."}>
             <div className="flex gap-2" data-tour="ticket-eta">
-              <Input className="min-w-0" type="datetime-local" value={eta} min={toLocalInput(null)} onChange={(e) => {
+              <Input className="min-w-0" type="datetime-local" value={eta} min={toLocalInput(null)} max="2099-12-31T23:59" onChange={(e) => {
                 etaDirty.current = true;
                 setEta(e.target.value);
               }} />
               <Button className="!h-9 shrink-0" variant={task.eta ? "outline" : "primary"} disabled={!eta || (!!task.eta && toLocalInput(task.eta) === eta)} busy={busy === "eta"} onClick={() => run("eta", "setTaskEta", { eta: new Date(eta).toISOString() }, "ETA saved.")}>
                 {task.eta ? "Update" : "Set"}
               </Button>
+            </div>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {etaPresets().map((p) => (
+                <button
+                  key={p.label}
+                  type="button"
+                  className="rounded-full border border-line px-2.5 py-0.5 text-xs text-ink-2 hover:bg-page"
+                  onClick={() => {
+                    etaDirty.current = true;
+                    setEta(toLocalInput(p.at.toISOString()));
+                  }}
+                >
+                  {p.label}
+                </button>
+              ))}
             </div>
           </Field>
           <div>

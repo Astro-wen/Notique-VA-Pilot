@@ -135,10 +135,15 @@ export function Coach({ name, steps, ready = true, primary }: { name: string; st
     el?.scrollIntoView({ block: "center", inline: "nearest" });
     measure();
     const again = window.setTimeout(measure, 250);
+    // Content that loads after the step starts (a table, a draft) moves things: follow it.
+    const watch = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => measure()) : null;
+    watch?.observe(document.body);
+    if (el) watch?.observe(el);
     window.addEventListener("resize", measure);
     window.addEventListener("scroll", measure, true);
     return () => {
       window.clearTimeout(again);
+      watch?.disconnect();
       window.removeEventListener("resize", measure);
       window.removeEventListener("scroll", measure, true);
     };
@@ -278,9 +283,10 @@ export const TOURS = {
     { target: "queue-table", title: "Conversations to verify", body: "Sorted by deadline, most urgent on top. Click Verify to open one and check the AI's draft against the transcript." },
     { target: "add-conversation", title: "Add something yourself", body: "Got a recording, transcript, or text thread from the user by email or text? Upload it here and it joins the queue." },
     { target: "nav-projects", title: "Projects: one per client", body: "Each client has a deal profile with every verified fact, the tickets, the files, and anything you are watching in the market for them." },
-    { target: "nav-tasks", title: "Tickets: work the user asked for", body: "The user calls these requests. Open one to set an ETA, finish the AI's first draft, and deliver." },
+    { target: "nav-tasks", title: "Tickets: work the user asked for", body: "The user calls these requests. Open one to set an ETA, finish the AI's first draft, and deliver. If the user asks for something by text, email or phone, use Log a request there so it is tracked." },
     { target: "nav-checkin", title: "Check-in: once a day", body: "A ready message asking the user what is still open and offering to take it over. Edit it, send it, mark it done." },
     { target: "nav-sources", title: "Data sources", body: "Every way a conversation can come in, with an upload button for each." },
+    { target: "nav-how", title: "How it works", body: "A one-page picture of the whole flow: who does what at each step, and where you and the user hand work to each other." },
     { target: "nav-qc", title: "QC review", body: "Your numbers: how many AI drafts you approved, edited, or declined, and what the user did with your deliverables." },
     { target: "user-menu", title: "Help lives here", body: "Replay this tour, open Help, or sign out." },
   ],
@@ -288,7 +294,7 @@ export const TOURS = {
     { title: "Checking a conversation", body: "The transcript is on the left, the AI's drafts are on the right. Your job: decide on every draft, then submit." },
     { target: "fact", title: "One draft at a time", body: "Read the quote under it. Approve if it matches. Edit to fix the wording or move it to another section. Decline if the AI got it wrong. Ask user if the transcript does not settle it. Keys A, E, D, I do the same. Some drafts carry a suggested request: approving sends that suggestion to the user. No Approve button means the AI was unsure or the wording describes a person instead of the property: use Edit and approve." },
     { target: "transcript", title: "Click a quote to jump here", body: "The matching line flashes in the transcript. With a recording, the audio jumps to that moment." },
-    { target: "add-fact", title: "The AI missed something?", body: "Tick the transcript lines that prove it, then add the fact yourself." },
+    { target: "add-fact", title: "The AI missed something?", body: "Click the transcript lines that prove it (they turn blue), then click Add fact and write it yourself." },
     { target: "settles", title: "Did this settle anything from before?", body: "Below the drafts is the client's list of earlier open questions, concerns and next steps. Tick the ones this conversation answered. The AI pre-ticks its guesses. On submit they disappear from the user's deal profile." },
     { target: "checks", title: "Four checks before you submit", body: "Tick each one only after you have checked it yourself. No consent, the wrong client, or audio you cannot follow: use Escalate at the bottom instead of submitting." },
     { target: "submit", title: "Submit", body: "Unlocks when every draft has a decision and all four checks are ticked. The user sees the approved facts and the summary right away. You can reopen for 24 hours." },
@@ -303,7 +309,7 @@ export const TOURS = {
   ],
   agentHome: [
     { title: "Welcome to Notique", body: "Your assistant turns each client conversation into checked notes and follow-up work. Here is where things are." },
-    { target: "add-conversation", title: "Start here", body: "After a meeting, add the recording, a transcript, a text thread, or a typed note." },
+    { target: "add-conversation", title: "Start here", body: "After a meeting, add the recording, a transcript, a text thread, or a written note." },
     { target: "new-task", title: "Submit a request", body: "Need research, a comparison, or a draft? Ask your assistant here." },
     { target: "project-list", title: "One project per client", body: "Open a client to see what was decided, what changed, and what is still open." },
     { target: "user-menu", title: "Help lives here", body: "Replay this tour or open Help any time." },

@@ -19,7 +19,7 @@ function How() {
       </header>
       <main className="mx-auto max-w-[1500px] px-4 py-6">
         <h1 className="text-xl font-semibold">How Notique works</h1>
-        <p className="mt-1 max-w-3xl text-sm text-ink-2">One conversation goes in on the left. A finished follow-up comes out on the right. AI does the first pass at each step, a human assistant checks it, and the user is only asked for a tap.</p>
+        <p className="mt-1 max-w-3xl text-sm text-ink-2">One conversation goes in at step 1. A finished follow-up comes out at step 6. AI does the first pass at each step, a human assistant checks it, and the user is only asked for a tap.</p>
         <div className="mt-5">
           <HowItWorks role={role} />
         </div>

@@ -185,7 +185,7 @@ export function Console() {
           ) : view === "how" ? (
             <div>
               <h1 className="text-xl font-semibold">How Notique works</h1>
-              <p className="mt-1 max-w-3xl text-[13px] text-ink-2">One conversation goes in on the left. A finished follow-up comes out on the right. Click any step to see who does what and where you and the user hand off.</p>
+              <p className="mt-1 max-w-3xl text-[13px] text-ink-2">One conversation goes in at step 1. A finished follow-up comes out at step 6. Click any step to see who does what and where you and the user hand off.</p>
               <div className="mt-4">
                 <HowItWorks role="va" />
               </div>

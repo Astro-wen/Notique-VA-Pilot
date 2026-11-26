@@ -114,7 +114,10 @@ function AgentApp() {
               <div>
                 <h1 className="text-xl font-semibold">All Projects</h1>
                 <p className="mt-0.5 text-[13px] text-ink-3">
-                  Hi {me?.profile.name.split(" ")[0]}. {me?.assistant ? `Your assistant is ${me.assistant}.` : "An assistant will be assigned to you shortly."}
+                  Hi {me?.profile.name.split(" ")[0]}.{" "}
+                  {me?.assistant
+                    ? `${me.assistant.split(" ")[0]} is your assistant, a real person who checks your client conversations and does your follow-up work.`
+                    : "An assistant will be assigned to you shortly."}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -131,6 +134,35 @@ function AgentApp() {
             </div>
             {error && !data ? <ErrorNote className="mt-4" message={error} onRetry={() => reload()} /> : null}
             {loading && !data ? <Spinner /> : null}
+            {data && data.some((p) => p.needs_answer || p.to_review || p.suggested) ? (
+              // One place that answers "what is waiting on me", across every client.
+              <Card className="mt-5 p-3.5">
+                <div className="text-xs font-semibold uppercase tracking-wide text-ink-3">Waiting on you</div>
+                <ul className="mt-1.5 divide-y divide-line">
+                  {data
+                    .filter((p) => p.needs_answer || p.to_review || p.suggested)
+                    .map((p) => (
+                      <li key={p.id}>
+                        <button className="flex w-full items-center gap-3 py-2.5 text-left" onClick={() => router.push(`/agent?project=${p.id}`)}>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium">{p.client_name}</span>
+                            <span className="block text-[13px] text-ink-2">
+                              {[
+                                p.needs_answer ? `${p.needs_answer === 1 ? "a question" : `${p.needs_answer} questions`} from ${me?.assistant?.split(" ")[0] ?? "your assistant"}` : "",
+                                p.to_review ? `${p.to_review} ${p.to_review === 1 ? "delivery" : "deliveries"} to review` : "",
+                                p.suggested ? `${p.suggested} suggested follow-up${p.suggested === 1 ? "" : "s"} to send or skip` : "",
+                              ]
+                                .filter(Boolean)
+                                .join(", ")}
+                            </span>
+                          </span>
+                          <span className="text-[13px] font-medium text-accent">Open</span>
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              </Card>
+            ) : null}
             {data && data.length === 0 ? (
               <Card className="mt-5">
                 <Empty
@@ -157,7 +189,7 @@ function AgentApp() {
                   {p.suggested ? <Badge tone="accent">{p.suggested} {p.suggested === 1 ? "suggestion" : "suggestions"}</Badge> : null}
                   {p.failed_events ? <Badge tone="bad">Could not read {p.failed_events === 1 ? "an upload" : `${p.failed_events} uploads`}</Badge> : null}
                   {p.pending_events ? <Badge tone={isPast(p.verify_due) ? "warn" : "neutral"}>{isPast(p.verify_due) ? "Being verified, running late" : `Being verified${p.verify_due ? `, ready by ${dateTime(p.verify_due, me?.profile.timezone)}` : ""}`}</Badge> : null}
-                  {p.in_progress ? <Badge>{p.in_progress} in progress</Badge> : null}
+                  {p.in_progress ? <Badge>{p.in_progress} with {me?.assistant?.split(" ")[0] ?? "your assistant"}</Badge> : null}
                 </button>
               ))}
             </div>
@@ -197,7 +229,7 @@ function AgentApp() {
         }}
         onCreated={(e) => {
           reload(true);
-          toast(e.status === "failed" ? `We could not process it: ${e.error}` : "Received. Your assistant will verify it.", e.status === "failed" ? { tone: "error" } : undefined);
+          toast(e.status === "failed" ? `We could not process it: ${e.error}` : "Received. It shows on the Timeline as being verified, with facts by 9:00 AM the next business day.", e.status === "failed" ? { tone: "error" } : undefined);
           router.push(`/agent?project=${e.project_id}`);
         }}
       />

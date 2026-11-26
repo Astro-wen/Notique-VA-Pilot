@@ -11,7 +11,7 @@ const KIND: Record<CheckinItem["kind"], { label: string; tone: Tone }> = {
   waiting: { label: "Needs their answer", tone: "warn" },
   suggested: { label: "Suggested, user has not decided", tone: "accent" },
   unreviewed: { label: "Delivered, no feedback", tone: "neutral" },
-  question: { label: "User still has to ask the client", tone: "neutral" },
+  question: { label: "User still has to ask the client. Remind them in your message.", tone: "neutral" },
 };
 
 /** Once a day the VA asks the user what is still open, and offers to take it over. */
@@ -215,7 +215,7 @@ export function Checkin({ nav }: { nav: VaNav }) {
                   <option value="call">I called instead</option>
                 </Select>
                 <Button size="sm" variant={data.doneToday ? "outline" : "primary"} icon={<Check className="h-3.5 w-3.5" />} busy={busy === "done"} onClick={markDone}>
-                  {data.doneToday ? "Log again" : "Mark done for today"}
+                  {data.doneToday ? "Log another check-in today" : "Mark done for today"}
                 </Button>
               </div>
             </Card>

@@ -315,7 +315,7 @@ export function ProjectView({ nav, projectId, tab, taskId }: { nav: VaNav; proje
         <div className="mt-4 grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
           <div className={cx("space-y-4", selected && "hidden lg:block")}>
             <Button size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setDialog("ticket")}>
-              New ticket for the user
+              Log a request from {nav.agent.name.split(" ")[0]}
             </Button>
             {data.tasks.length === 0 ? (
               <Card>
@@ -462,6 +462,7 @@ export function ProjectView({ nav, projectId, tab, taskId }: { nav: VaNav; proje
         open={dialog === "ticket"}
         onClose={() => setDialog(null)}
         projectId={projectId}
+        userName={nav.agent.name}
         onCreated={(t) => {
           reload(true);
           nav.refreshCounts();

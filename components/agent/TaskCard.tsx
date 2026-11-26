@@ -42,6 +42,7 @@ export function TaskFormDialog({ open, onClose, projectId, task, onSaved, projec
     try {
       const saved = task ? await rpc<Task>("updateTask", { task_id: task.id, title, description, category }) : await rpc<Task>("createTask", { project_id: pid, title, description, category });
       onSaved(saved);
+      if (!task) toast("Sent to your assistant. You will see a delivery time once they start. Find it under Requests.");
       onClose();
     } catch (err) {
       // Someone else moved the request on while this was open. Keep what was typed and offer the next best path.

@@ -18,6 +18,8 @@ export function DraftPanel({ taskId, draft, open, onSaved, onChanged }: { taskId
   const dirty = useRef(false);
   const [replace, setReplace] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "failed">("idle");
+  // A checklist for this visit only, to keep track while looking things up.
+  const [doneGaps, setDoneGaps] = useState<Record<string, boolean>>({});
   const pending = useRef<{ taskId: string; body: string } | null>(null);
   const timer = useRef<number | null>(null);
   const stamp = draft?.status === "ready" ? draft.updated_at : null;
@@ -124,24 +126,15 @@ export function DraftPanel({ taskId, draft, open, onSaved, onChanged }: { taskId
 
       {!draft ? <p className="mt-2 text-[13px] text-ink-3">No draft yet. Ask for one below.</p> : null}
       {working ? (
-        <div className="mt-2 flex items-center gap-2 text-[13px] text-ink-3">
-          <Spinner /> Writing a first draft from what has been verified for this client.
+        // Same height as the finished draft, so nothing below it jumps when it arrives.
+        <div className="mt-2 flex min-h-[290px] items-start gap-2 rounded-md border border-dashed border-line-strong px-3 py-2.5 text-[13px] text-ink-3">
+          <Spinner /> Writing a first draft from what has been verified for this client. This takes about 10 seconds.
         </div>
       ) : null}
       {draft?.status === "failed" ? <p className="mt-2 text-[13px] text-bad">The draft could not be written: {draft.error}</p> : null}
 
       {draft?.status === "ready" ? (
         <>
-          {draft.gaps.length ? (
-            <div className="mt-2 rounded-lg bg-warn-soft px-3 py-2 text-[13px] text-ink-2">
-              <div className="font-medium text-ink">Before you deliver, look up or confirm</div>
-              <ul className="mt-1 list-disc space-y-0.5 pl-4">
-                {draft.gaps.map((g) => (
-                  <li key={g}>{g}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
           <Textarea
             className="mt-2 font-[450]"
             rows={12}
@@ -160,7 +153,24 @@ export function DraftPanel({ taskId, draft, open, onSaved, onChanged }: { taskId
           <div className="mt-1 h-4 text-xs text-ink-3" aria-live="polite">
             {saveState === "saving" ? "Saving your edits" : saveState === "saved" ? "Your edits are saved" : saveState === "failed" ? <span className="text-bad">Your edits could not be saved. Copy them somewhere safe and reload.</span> : null}
           </div>
-          <p className="mt-1.5 text-xs text-ink-3">Written by AI and not reviewed. The user cannot see it. Check every fact, finish it, then save it to Deliverables below.</p>
+          <p className="mt-1.5 text-xs text-ink-3">
+            {draft.edited_at || dirty.current ? "You have edited this draft." : "Written by AI and not reviewed yet."} The user cannot see it. Check every fact, finish it, then save it to Deliverables below.
+          </p>
+          {draft.gaps.length ? (
+            <div className="mt-2 rounded-lg bg-warn-soft px-3 py-2 text-[13px] text-ink-2">
+              <div className="font-medium text-ink">Before you deliver, look up or confirm</div>
+              <ul className="mt-1 space-y-1">
+                {draft.gaps.map((g) => (
+                  <li key={g}>
+                    <label className="flex cursor-pointer items-start gap-2">
+                      <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-[#177245]" checked={!!doneGaps[g]} onChange={(e) => setDoneGaps((d) => ({ ...d, [g]: e.target.checked }))} />
+                      <span className={doneGaps[g] ? "text-ink-3 line-through" : ""}>{g}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </>
       ) : null}
 

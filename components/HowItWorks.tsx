@@ -174,7 +174,7 @@ export function HowItWorks({ role }: { role: "agent" | "va" | "admin" }) {
 
   return (
     <div>
-      <div className="flex flex-wrap gap-1.5">
+      <div className="hidden flex-wrap gap-1.5 sm:flex">
         {STAGES.map((s, i) => (
           <button
             key={s.name}
@@ -198,7 +198,7 @@ export function HowItWorks({ role }: { role: "agent" | "va" | "admin" }) {
         )}
       </div>
 
-      <div ref={scroller} className="mt-3 overflow-x-auto rounded-xl border border-line bg-white p-2">
+      <div ref={scroller} className="mt-3 hidden overflow-x-auto rounded-xl border border-line bg-white p-2 sm:block">
         <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full min-w-[1040px] text-ink" role="img" aria-label="How Notique works: the user adds a conversation, AI drafts the facts, the VA checks them and submits, the user asks for help, AI writes a first draft, the VA does the work and delivers it, and the user reviews and sends it.">
           <defs>
             <marker id="hw-n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -354,6 +354,58 @@ export function HowItWorks({ role }: { role: "agent" | "va" | "admin" }) {
         </svg>
       </div>
 
+      {/* On a phone the wide diagram becomes a list: each step opens to who does what. */}
+      <ol className="mt-3 space-y-2 sm:hidden">
+        {STAGES.map((st, k) => (
+          <li key={st.name} className="rounded-xl border border-line bg-white">
+            <button className="flex w-full items-start gap-3 p-3 text-left" onClick={() => setStage(stage === k ? null : k)} aria-expanded={stage === k}>
+              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink text-xs font-bold text-white">{k + 1}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] font-semibold">{st.name}</span>
+                <span className="block text-[13px] text-ink-2">{st.line}</span>
+              </span>
+              <span className="text-xs text-accent">{stage === k ? "Hide" : "Show"}</span>
+            </button>
+            {stage === k ? (
+              <div className="space-y-2 border-t border-line p-3 text-[13px]">
+                {(
+                  [
+                    ["User", st.user, US],
+                    ["Notique AI", st.ai, AI],
+                    ["VA", st.va, VA],
+                  ] as const
+                ).map(([who, text, c]) => (
+                  <div key={who} className="rounded-lg p-2.5" style={{ background: `${c}1f`, border: `1.5px solid ${c}` }}>
+                    <div className="text-xs font-semibold uppercase tracking-wide">{who}</div>
+                    <p className="mt-0.5 text-ink-2">{text}</p>
+                  </div>
+                ))}
+                <div className="rounded-lg p-2.5" style={{ border: `1.5px solid ${ACC}` }}>
+                  <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: ACC }}>
+                    Where the user and the VA meet
+                  </div>
+                  <p className="mt-0.5 text-ink-2">{st.meet}</p>
+                </div>
+                {st.clicks.map((c) => (
+                  <p key={c.who + c.steps} className="text-ink-2">
+                    <span className="font-semibold text-ink">{c.who}:</span> {c.steps}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+          </li>
+        ))}
+        {DAILY.map((d) => (
+          <li key={d.title} className={cx("rounded-xl border bg-white p-3", d.planned ? "border-dashed border-line-strong" : "border-line")}>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[15px] font-semibold">{d.title}</span>
+              <span className="text-xs text-ink-3">{d.planned ? "Planned, not live yet" : "Every day"}</span>
+            </div>
+            <p className="mt-0.5 text-[13px] text-ink-2">{d.detail}</p>
+          </li>
+        ))}
+      </ol>
+      <div className="hidden sm:block">
       {info ? (
         <div className="mt-3 rounded-xl border border-line bg-white p-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -408,6 +460,7 @@ export function HowItWorks({ role }: { role: "agent" | "va" | "admin" }) {
       ) : (
         <p className="mt-3 text-[13px] text-ink-3">Read left to right. Solid boxes are live today. Dashed boxes are planned. Blue arrows are the moments the user and the VA hand work to each other. Nothing written by AI reaches the user until the VA has checked it.</p>
       )}
+      </div>
     </div>
   );
 }

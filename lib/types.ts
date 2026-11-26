@@ -327,6 +327,7 @@ export interface ProjectDetail {
   files: FileRow[];
   shareLink: ShareLink | null;
   pendingEvents: number;
+  pendingList?: { id: string; title: string; occurred_at: string; source: string; due_at: string | null }[];
   /** When the last conversation still being verified is due. */
   pendingDue?: string | null;
   /** Uploads still being transcribed or read. */

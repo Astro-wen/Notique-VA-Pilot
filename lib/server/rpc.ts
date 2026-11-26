@@ -1000,6 +1000,10 @@ async function buildProject(project: Project, forAgent: boolean): Promise<Projec
     shareLink: forAgent ? null : links[0] ?? null,
     pendingEvents: allEvents.filter((e) => ["processing", "extracting", "ready", "in_review"].includes(e.status)).length,
     pendingDue: allEvents.filter((e) => ["processing", "extracting", "ready", "in_review"].includes(e.status) && e.due_at).map((e) => e.due_at as string).sort().pop() ?? null,
+    // What the user sent that is still being verified, so it shows on the timeline right away.
+    pendingList: allEvents
+      .filter((e) => ["processing", "extracting", "ready", "in_review"].includes(e.status))
+      .map((e) => ({ id: e.id, title: e.title, occurred_at: e.occurred_at, source: e.source, due_at: e.due_at ?? null })),
     lastVerified,
     watches: await projectWatches(project.id, forAgent),
     failedUploads: rawEvents.filter((e) => e.status === "failed").map((e) => ({ id: e.id as string, title: e.title as string })),

@@ -86,7 +86,7 @@ export function AddEventDialog({ open, onClose, projects, agentId, defaultProjec
 
   async function submit() {
     setError(null);
-    if (!projectId) return setError("Choose a project.");
+    if (!projectId) return setError("Choose which client this is about.");
     if (projectId === "new" && !newClient.trim()) return setError("Enter the client name for the new project.");
     if (kind === "files") {
       if (files.length === 0) return setError("Choose at least one photo or file.");
@@ -220,17 +220,17 @@ export function AddEventDialog({ open, onClose, projects, agentId, defaultProjec
         <p className="text-[13px] text-ink-3">{current.hint}</p>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Project">
+          <Field label="Client">
             <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
               <option value="" disabled>
-                Choose a project
+                Choose a client
               </option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.client_name}
                 </option>
               ))}
-              <option value="new">New project</option>
+              <option value="new">New client</option>
             </Select>
           </Field>
           {projectId === "new" ? (
@@ -287,7 +287,7 @@ export function AddEventDialog({ open, onClose, projects, agentId, defaultProjec
           </label>
         ) : kind === "files" ? null : files.length === 0 ? (
           <Field label={kind === "note" ? "Note" : "Or paste the text"}>
-            <Textarea rows={6} value={text} onChange={(e) => setText(e.target.value)} placeholder={kind === "texts" ? "Michael: Can we see the Maple St house again Saturday?" : "Paste the full text here"} />
+            <Textarea rows={6} value={text} onChange={(e) => setText(e.target.value)} placeholder={kind === "texts" ? "Michael: Can we see the Maple St house again Saturday?" : kind === "note" ? "What was said, what was decided, and what happens next" : "Paste the full text here"} />
           </Field>
         ) : null}
 
