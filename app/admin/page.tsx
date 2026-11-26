@@ -21,6 +21,7 @@ function AdminPage() {
   const [remove, setRemove] = useState<AdminUser | null>(null);
   const [edit, setEdit] = useState<AdminUser | null>(null);
   const [editForm, setEditForm] = useState({ name: "", company: "", timezone: "America/Los_Angeles" });
+  const [contact, setContact] = useState({ phone: "", notify: "off", brief: "off" });
   const [form, setForm] = useState({ name: "", email: "", role: "agent", company: "", timezone: "America/Los_Angeles", password: "" });
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -68,6 +69,7 @@ function AdminPage() {
     setBusy(true);
     try {
       await rpc("adminUpdateUser", { user_id: edit.id, ...editForm });
+      if (edit.role === "agent") await rpc("adminSetContact", { user_id: edit.id, ...contact });
       toast("Saved.");
       setEdit(null);
       reload(true);
@@ -152,6 +154,7 @@ function AdminPage() {
                           onClick={() => {
                             setEditForm({ name: u.name, company: u.company ?? "", timezone: u.timezone });
                             setEdit(u);
+                            setContact({ phone: u.contact?.phone ?? "", notify: u.contact?.notify ?? "off", brief: u.contact?.brief ?? "off" });
                           }}
                         >
                           <Pencil className="h-3 w-3" />
@@ -297,6 +300,33 @@ function AdminPage() {
               ))}
             </Select>
           </Field>
+          {edit?.role === "agent" ? (
+            <div className="space-y-4 rounded-lg border border-line p-3">
+              <div>
+                <div className="text-[13px] font-semibold">Reaching this user</div>
+                <p className="text-xs text-ink-3">Turn these on only after the user agreed to get emails or texts from Notique. Emails go to {edit.email}.</p>
+              </div>
+              <Field label="Mobile number" hint="Needed for texts. US numbers can be typed without +1.">
+                <Input value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value })} placeholder="310 555 0123" inputMode="tel" />
+              </Field>
+              <Field label="Notices" hint="When a delivery is ready or the assistant has a question.">
+                <Select value={contact.notify} onChange={(e) => setContact({ ...contact, notify: e.target.value })}>
+                  <option value="off">Off</option>
+                  <option value="email">Email</option>
+                  <option value="sms">Text</option>
+                  <option value="both">Email and text</option>
+                </Select>
+              </Field>
+              <Field label="Morning brief" hint="Once a day, only when something is waiting: follow-ups due, deliveries to review, questions, suggestions.">
+                <Select value={contact.brief} onChange={(e) => setContact({ ...contact, brief: e.target.value })}>
+                  <option value="off">Off</option>
+                  <option value="email">Email</option>
+                  <option value="sms">Text</option>
+                  <option value="both">Email and text</option>
+                </Select>
+              </Field>
+            </div>
+          ) : null}
         </div>
       </Modal>
 

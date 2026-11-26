@@ -304,6 +304,8 @@ export interface CheckinResult {
   last: { at: string; by: string; channel: string; count: number } | null;
   history: { at: string; by: string; channel: string; count: number; note: string | null }[];
   doneToday: boolean;
+  /** Which channels the system can send on, and whether this user agreed to them. */
+  reach: { email: boolean; sms: boolean; emailTo: string | null; smsTo: string | null };
 }
 
 export interface ProjectDetail {
@@ -344,7 +346,30 @@ export interface ProjectListItem extends Project {
   last_activity: string | null;
 }
 
+/** AI first draft of a ticket's deliverable. Staff only. */
+export interface TaskDraft {
+  task_id: string;
+  status: "working" | "ready" | "failed";
+  body: string | null;
+  gaps: string[];
+  model: string | null;
+  error: string | null;
+  updated_at: string;
+}
+
+export type ReachChannel = "off" | "email" | "sms" | "both";
+
+export interface ContactPrefs {
+  phone: string | null;
+  /** Delivery and question notices. */
+  notify: ReachChannel;
+  /** Daily morning brief. */
+  brief: ReachChannel;
+}
+
 export interface TaskDetail {
+  /** Present for staff when drafting is switched on. Never sent to users. */
+  draft?: TaskDraft | null;
   task: Task;
   project: Project;
   messages: TaskMessage[];
@@ -375,4 +400,5 @@ export interface ShareView {
 
 export interface AdminUser extends Profile {
   assigned_agent_ids: string[];
+  contact?: ContactPrefs | null;
 }

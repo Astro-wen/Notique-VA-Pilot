@@ -545,3 +545,47 @@ export async function draftFollowUp(input: { clientName: string; condition: stri
   ])) as { message?: unknown } | null;
   return typeof raw?.message === "string" ? raw.message.trim().slice(0, 1200) : "";
 }
+
+
+/* ------------------------------------------------------------------ */
+/* First drafts for tickets                                             */
+/* ------------------------------------------------------------------ */
+
+export interface DraftResult {
+  body: string;
+  /** Things the VA has to look up or confirm before this can be delivered. */
+  gaps: string[];
+  sources: { title: string; url: string }[];
+  model: string | null;
+}
+
+const DRAFT_PROMPT = `You prepare the first draft of a deliverable for a real estate agent. A human assistant will check and finish it before the agent sees it.
+Rules:
+1. Use only the verified facts given about this client and deal. Never invent addresses, prices, listings, names, dates, or numbers.
+2. Where something is needed that you do not have, write a bracketed placeholder in the text, for example [ADD: three comparable sales near Maple St], and list it in "gaps".
+3. Write the deliverable itself, ready to edit: an email or message in the agent's voice, a checklist, a comparison outline, a call script, or a short research brief, whichever the request calls for.
+4. Plain text. Short paragraphs. No markdown symbols. Under 350 words.
+5. Fair housing: never mention or steer on race, color, religion, national origin, sex, disability, familial status, age, or military status. Describe properties and requirements, not people.
+6. No pressure tactics and no promises about the market.
+Return only JSON: {"draft": "...", "gaps": ["..."]}`;
+
+/** Drafts a ticket's deliverable from the verified deal profile. */
+export async function draftDeliverable(input: { title: string; description: string; category: string; clientName: string; dealType: string; area: string | null; budget: string | null; facts: string[]; thread: string[]; instructions?: string | null }): Promise<DraftResult> {
+  const raw = (await chatJson([
+    { role: "system", content: DRAFT_PROMPT },
+    {
+      role: "user",
+      content: JSON.stringify({
+        request: { title: input.title, details: input.description, category: input.category },
+        client: { name: input.clientName, deal: input.dealType, area: input.area, budget: input.budget },
+        verified_facts: input.facts.slice(0, 40),
+        messages_on_this_ticket: input.thread.slice(-8),
+        extra_instructions_from_the_assistant: input.instructions ?? null,
+      }),
+    },
+  ])) as { draft?: unknown; gaps?: unknown } | null;
+  const body = typeof raw?.draft === "string" ? raw.draft.trim().slice(0, 6000) : "";
+  if (!body) throw new PipelineError("The model did not return a draft.");
+  const gaps = Array.isArray(raw?.gaps) ? raw.gaps.filter((g): g is string => typeof g === "string" && !!g.trim()).map((g) => g.trim().slice(0, 200)).slice(0, 10) : [];
+  return { body, gaps, sources: [], model: lastModelUsed };
+}

@@ -2,11 +2,13 @@
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { after } from "next/server";
 import { BUCKET, db } from "./supabase";
+import { channels, normalizePhone, sendEmail, sendSms } from "./notify";
 import { nextBusinessDayNine, startOfWeekIn, startOfWeekUtc } from "./time";
 import {
   PipelineError,
   checkCondition,
   docxToText,
+  draftDeliverable,
   draftFollowUp,
   extractFacts,
   getTranscription,
@@ -42,6 +44,9 @@ import type {
   CheckinItem,
   CheckinResult,
   Watch,
+  ContactPrefs,
+  ReachChannel,
+  TaskDraft,
 } from "@/lib/types";
 
 export class RpcError extends Error {
@@ -659,6 +664,170 @@ async function loadWatch(p: Profile, watchId: unknown): Promise<Watch> {
   return res.data as Watch;
 }
 
+/* ---------- Reaching the user ---------- */
+
+const SITE = () => `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL || "notiqueva.vercel.app"}`;
+
+async function contactPrefs(agentId: string): Promise<ContactPrefs> {
+  const res = await db().from("contact_prefs").select("phone,notify,brief").eq("agent_id", agentId).maybeSingle();
+  return (res.data as ContactPrefs | null) ?? { phone: null, notify: "off", brief: "off" };
+}
+
+/** Where a message can actually go for this user, given what is set up and what they agreed to. */
+async function reachFor(agentId: string): Promise<{ email: boolean; sms: boolean; emailTo: string | null; smsTo: string | null; prefs: ContactPrefs }> {
+  const prefs = await contactPrefs(agentId);
+  const profile = q(await db().from("profiles").select("email").eq("id", agentId).maybeSingle()) as { email: string } | null;
+  const on = channels();
+  const smsTo = prefs.phone ? normalizePhone(prefs.phone) : null;
+  return { email: on.email && !!profile?.email, sms: on.sms && !!smsTo, emailTo: profile?.email ?? null, smsTo, prefs };
+}
+
+/** Sends on the given channels and records every attempt. Never throws: a failed notice must not break the action behind it. */
+async function reachUser(agentId: string, kind: string, want: ReachChannel, subject: string, body: string, actor: Profile | null): Promise<{ sent: string[]; failed: string[] }> {
+  const sent: string[] = [];
+  const failed: string[] = [];
+  if (want === "off") return { sent, failed };
+  const reach = await reachFor(agentId).catch(() => null);
+  if (!reach) return { sent, failed };
+  const jobs: { channel: "email" | "sms"; to: string | null; ok: boolean; run: () => Promise<void> }[] = [];
+  if (want === "email" || want === "both") jobs.push({ channel: "email", to: reach.emailTo, ok: reach.email, run: () => sendEmail(reach.emailTo as string, subject, body) });
+  if (want === "sms" || want === "both") jobs.push({ channel: "sms", to: reach.smsTo, ok: reach.sms, run: () => sendSms(reach.smsTo as string, body) });
+  for (const job of jobs) {
+    if (!job.ok || !job.to) {
+      failed.push(job.channel);
+      continue;
+    }
+    let error: string | null = null;
+    try {
+      await job.run();
+      sent.push(job.channel);
+    } catch (err) {
+      error = (err as Error).message.slice(0, 300);
+      failed.push(job.channel);
+    }
+    await db().from("notifications").insert({ agent_id: agentId, kind, channel: job.channel, recipient: job.to, subject: job.channel === "email" ? subject : null, body, status: error ? "failed" : "sent", error, sent_by: actor?.id ?? null });
+  }
+  return { sent, failed };
+}
+
+/** Short notice that something is waiting in Notique. Runs after the response so it never slows the VA down. */
+function notifyLater(agentId: string, kind: string, subject: string, body: string, actor: Profile | null) {
+  const run = async () => {
+    const prefs = await contactPrefs(agentId).catch(() => null);
+    if (!prefs || prefs.notify === "off") return;
+    await reachUser(agentId, kind, prefs.notify, subject, body, actor);
+  };
+  try {
+    after(() => run().catch(() => {}));
+  } catch {
+    void run().catch(() => {});
+  }
+}
+
+/**
+ * Morning brief, built only from verified facts and ticket states. No AI text, so it can go out without review.
+ * Sent at most once a day per user, and only when there is something to say.
+ */
+export async function sendMorningBriefs(): Promise<{ sent: number; skipped: number }> {
+  const res = await db().from("contact_prefs").select("agent_id,brief").neq("brief", "off");
+  if (res.error) return { sent: 0, skipped: 0 };
+  let sent = 0;
+  let skipped = 0;
+  for (const row of (res.data ?? []) as { agent_id: string; brief: ReachChannel }[]) {
+    try {
+      const since = new Date(Date.now() - 18 * 3600 * 1000).toISOString();
+      const already = await db().from("notifications").select("id", { count: "exact", head: true }).eq("agent_id", row.agent_id).eq("kind", "brief").eq("status", "sent").gte("created_at", since);
+      if ((already.count ?? 0) > 0) {
+        skipped += 1;
+        continue;
+      }
+      const agent = q(await db().from("profiles").select("name").eq("id", row.agent_id).single()) as { name: string };
+      const projects = q(await db().from("projects").select("id,client_name").eq("agent_id", row.agent_id)) as { id: string; client_name: string }[];
+      const pname = (id: string) => projects.find((x) => x.id === id)?.client_name ?? "";
+      const tasks = q(await db().from("tasks").select("title,status,project_id,agent_feedback,delivered_at,eta").eq("agent_id", row.agent_id).in("status", ["suggested", "waiting", "delivered", "in_progress"]).order("created_at", { ascending: false }).limit(200)) as any[];
+      const ready = tasks.filter((t) => t.status === "delivered" && !t.agent_feedback && daysSince(t.delivered_at) <= 7);
+      const waiting = tasks.filter((t) => t.status === "waiting");
+      const suggested = tasks.filter((t) => t.status === "suggested");
+      const dueToday = tasks.filter((t) => t.status === "in_progress" && t.eta && new Date(t.eta).getTime() - Date.now() < 24 * 3600 * 1000);
+      const today = new Date().toISOString().slice(0, 10);
+      const submitted = q(await db().from("events").select("id").eq("agent_id", row.agent_id).eq("status", "submitted")) as { id: string }[];
+      const followUps = submitted.length
+        ? (q(await db().from("facts").select("statement,project_id,follow_up_date").in("event_id", submitted.map((e) => e.id).slice(0, 300)).in("verdict", ["approved", "edited"]).is("resolved_at", null).lte("follow_up_date", today).not("follow_up_date", "is", null).limit(5)) as any[])
+        : [];
+      const lines: string[] = [];
+      const item = (t: { title: string; project_id: string }) => `${t.title}${pname(t.project_id) ? ` (${pname(t.project_id)})` : ""}`;
+      for (const f of followUps) lines.push(`Follow up today: ${f.statement}${pname(f.project_id) ? ` (${pname(f.project_id)})` : ""}`);
+      for (const t of ready.slice(0, 3)) lines.push(`Ready for you: ${item(t)}`);
+      for (const t of waiting.slice(0, 3)) lines.push(`Your assistant needs an answer: ${item(t)}`);
+      for (const t of dueToday.slice(0, 2)) lines.push(`Coming today: ${item(t)}`);
+      for (const t of suggested.slice(0, 3)) lines.push(`Suggested, say the word and your assistant takes it: ${item(t)}`);
+      if (lines.length === 0) {
+        skipped += 1;
+        continue;
+      }
+      const top = lines.slice(0, 6);
+      const body = [`Good morning ${agent.name.split(" ")[0]}. ${top.length === 1 ? "One thing" : `${top.length} things`} for today:`, ...top.map((l, i) => `${i + 1}. ${l}`), `Open Notique: ${SITE()}/agent`].join("\n");
+      const out = await reachUser(row.agent_id, "brief", row.brief, "Your Notique brief for today", body, null);
+      if (out.sent.length) sent += 1;
+      else skipped += 1;
+    } catch {
+      skipped += 1;
+    }
+  }
+  return { sent, skipped };
+}
+
+/* ---------- AI first drafts for tickets ---------- */
+
+async function loadDraft(taskId: string): Promise<TaskDraft | null | undefined> {
+  const res = await db().from("task_drafts").select("*").eq("task_id", taskId).maybeSingle();
+  // undefined: the table is not there yet, so the feature stays hidden.
+  if (res.error) return undefined;
+  return (res.data as TaskDraft | null) ?? null;
+}
+
+async function writeDraft(task: Task, instructions: string | null): Promise<void> {
+  const started = new Date().toISOString();
+  const claim = await db().from("task_drafts").upsert({ task_id: task.id, status: "working", error: null, updated_at: started }).select("task_id");
+  if (claim.error) return;
+  try {
+    const project = q(await db().from("projects").select("*").eq("id", task.project_id).single()) as Project;
+    const submitted = q(await db().from("events").select("id").eq("project_id", project.id).eq("status", "submitted")) as { id: string }[];
+    const facts = submitted.length
+      ? (q(await db().from("facts").select("section,statement").eq("project_id", project.id).in("event_id", submitted.map((e) => e.id)).in("verdict", ["approved", "edited"]).is("resolved_at", null).limit(40)) as { section: string; statement: string }[])
+      : [];
+    const thread = q(await db().from("task_messages").select("sender_role,body").eq("task_id", task.id).neq("sender_role", "system").order("created_at")) as { sender_role: string; body: string }[];
+    const out = await draftDeliverable({
+      title: task.title,
+      description: task.description,
+      category: task.category,
+      clientName: project.client_name,
+      dealType: project.deal_type,
+      area: project.area,
+      budget: project.budget,
+      facts: facts.map((f) => `${f.section}: ${f.statement}`),
+      thread: thread.map((m) => `${m.sender_role === "agent" ? "User" : "Assistant"}: ${m.body}`),
+      instructions,
+    });
+    // Only the run that started last may write, so a slow older run cannot replace a newer draft.
+    await db().from("task_drafts").update({ status: "ready", body: out.body, gaps: out.gaps, sources: out.sources, model: out.model, error: null, updated_at: new Date().toISOString() }).eq("task_id", task.id).eq("updated_at", started);
+  } catch (err) {
+    await db().from("task_drafts").update({ status: "failed", error: ((err as Error).message || "The draft could not be written.").slice(0, 300), updated_at: new Date().toISOString() }).eq("task_id", task.id).eq("updated_at", started);
+  }
+}
+
+/** Starts a first draft as soon as a ticket is open, so it is waiting when the VA picks it up. */
+function draftLater(task: Task) {
+  // A ticket opened by a watch already has its draft on the watch.
+  if (task.requested_via === "watch") return;
+  const run = () => writeDraft(task, null).catch(() => {});
+  try {
+    after(run);
+  } catch {
+    void run();
+  }
+}
+
 /* ---------- Daily check-in ---------- */
 
 function daysSince(iso: string | null | undefined): number {
@@ -717,7 +886,8 @@ async function buildCheckin(p: Profile, agentId: string): Promise<CheckinResult>
   const message = top.length
     ? [`Hi ${first}, ${mine} here with today's check-in.`, ...top.map(line), items.length > top.length ? `Plus ${items.length - top.length} more in Notique.` : "", "Reply with the numbers you want me to handle, or tell me what is already done."].filter(Boolean).join("\n")
     : "";
-  return { items, message, last, history, doneToday };
+  const reach = await reachFor(agentId).catch(() => null);
+  return { items, message, last, history, doneToday, reach: { email: !!reach?.email, sms: !!reach?.sms, emailTo: reach?.emailTo ?? null, smsTo: reach?.smsTo ?? null } };
 }
 
 async function buildProject(project: Project, forAgent: boolean): Promise<ProjectDetail> {
@@ -868,7 +1038,11 @@ export const handlers: Record<string, Handler> = {
     admin(ctx);
     const users = q(await db().from("profiles").select("*").order("created_at")) as Profile[];
     const links = q(await db().from("assignments").select("*")) as { va_id: string; agent_id: string }[];
-    return users.map((u) => ({ ...u, assigned_agent_ids: links.filter((l) => l.va_id === u.id).map((l) => l.agent_id) }));
+    const prefs = ((await db().from("contact_prefs").select("*")).data ?? []) as (ContactPrefs & { agent_id: string })[];
+    return users.map((u) => {
+      const c = prefs.find((x) => x.agent_id === u.id);
+      return { ...u, assigned_agent_ids: links.filter((l) => l.va_id === u.id).map((l) => l.agent_id), contact: c ? { phone: c.phone, notify: c.notify, brief: c.brief } : null };
+    });
   },
 
   async adminCreateUser(ctx, args) {
@@ -1673,7 +1847,8 @@ export const handlers: Record<string, Handler> = {
     let files = q(await db().from("files").select("*").eq("task_id", task.id).order("created_at")) as any[];
     if (p.role === "agent") files = files.filter((f) => !(f.kind === "deliverable" && f.status === "draft"));
     const events = q(await db().from("events").select("id,title,occurred_at").eq("project_id", task.project_id).eq("status", "submitted").order("occurred_at", { ascending: false }).limit(6)) as any[];
-    return { task: (await decorateTasks([task]))[0], project, messages, files: await decorateFiles(files), contextEvents: events };
+    const draft = isStaff(p) ? await loadDraft(task.id) : undefined;
+    return { task: (await decorateTasks([task]))[0], project, messages, files: await decorateFiles(files), contextEvents: events, ...(draft !== undefined ? { draft } : {}) };
   },
 
   async createTask(ctx, args): Promise<Task> {
@@ -1703,6 +1878,7 @@ export const handlers: Record<string, Handler> = {
         .single(),
     ) as Task;
     await audit(p, "task.create", "task", row.id, { via });
+    draftLater(row);
     return (await decorateTasks([row]))[0];
   },
 
@@ -1729,6 +1905,7 @@ export const handlers: Record<string, Handler> = {
     if (rows.length === 0) throw new RpcError("This task has already been handled.", 409);
     const row = rows[0];
     await audit(p, "task.assign", "task", task.id, { via });
+    draftLater(row);
     return (await decorateTasks([row]))[0];
   },
 
@@ -1806,6 +1983,7 @@ export const handlers: Record<string, Handler> = {
 
     if (senderRole === "va" && args.ask === true && task.status === "in_progress") {
       q(await db().from("tasks").update({ status: "waiting", ...pauseTimerPatch(task) }).eq("id", task.id).eq("status", "in_progress").select("id"));
+      notifyLater(task.agent_id, "question", "Your assistant has a question", `${p.name.split(" ")[0]} needs your answer to keep going on: ${task.title}. ${SITE()}/agent?project=${task.project_id}`, p);
     } else if (senderRole === "agent" && task.status === "waiting") {
       q(await db().from("tasks").update({ status: "in_progress" }).eq("id", task.id).eq("status", "waiting").select("id"));
     }
@@ -1832,6 +2010,7 @@ export const handlers: Record<string, Handler> = {
     }
     await systemMessage(task.id, `${p.name} delivered ${sent.length} ${sent.length === 1 ? "file" : "files"}.`);
     await audit(p, "task.deliver", "task", task.id, { files: sent.length });
+    notifyLater(task.agent_id, "delivered", "Your assistant delivered something", `Ready for you in Notique: ${task.title}. Review it before anything goes to your client. ${SITE()}/agent?project=${task.project_id}`, p);
     return (await decorateTasks([row]))[0];
   },
 
@@ -1878,6 +2057,76 @@ export const handlers: Record<string, Handler> = {
   },
 
   /* ---------- Daily check-in ---------- */
+
+  /** Which outbound channels are set up on this deployment. */
+  async reachStatus(ctx) {
+    staff(ctx);
+    return channels();
+  },
+
+  async adminSetContact(ctx, args): Promise<ContactPrefs> {
+    const p = admin(ctx);
+    const agentId = uid(args.user_id, "Account");
+    const target = q(await db().from("profiles").select("role").eq("id", agentId).maybeSingle()) as { role: string } | null;
+    if (target?.role !== "agent") throw new RpcError("Contact settings are for user accounts.");
+    const options = ["off", "email", "sms", "both"];
+    const notify = options.includes(args.notify) ? args.notify : "off";
+    const brief = options.includes(args.brief) ? args.brief : "off";
+    const raw = optStr(args.phone, 30);
+    const phone = raw ? normalizePhone(raw) : null;
+    if (raw && !phone) throw new RpcError("Enter the mobile number with area code, for example 310 555 0123.");
+    if (!phone && [notify, brief].some((v) => v === "sms" || v === "both")) throw new RpcError("Add a mobile number before turning on texts.");
+    const res = await db().from("contact_prefs").upsert({ agent_id: agentId, phone, notify, brief, updated_at: new Date().toISOString() }).select("phone,notify,brief").single();
+    if (res.error) throw new RpcError("Contact settings are not set up yet. Run the drafts and notifications migration in Supabase.", 503);
+    await audit(p, "contact.update", "profile", agentId, { notify, brief, has_phone: !!phone });
+    return res.data as ContactPrefs;
+  },
+
+  /** Sends the VA's check-in message for them and logs the check-in. The VA has read and edited the text. */
+  async sendCheckin(ctx, args): Promise<CheckinResult & { delivery: { sent: string[]; failed: string[] } }> {
+    const p = staff(ctx);
+    const agentId = uid(args.agent_id, "User");
+    await assertAgentAccess(p, agentId);
+    const channel = ["email", "sms", "both"].includes(args.channel) ? (args.channel as ReachChannel) : null;
+    if (!channel) throw new RpcError("Choose email, text, or both.");
+    const body = longText(args.message, "Message", 1500);
+    const delivery = await reachUser(agentId, "checkin", channel, `Check-in from ${p.name.split(" ")[0]} at Notique`, body, p);
+    if (delivery.sent.length === 0) throw new RpcError("The message could not be sent. Copy it and send it yourself, then mark the check-in done.", 502);
+    const current = await buildCheckin(p, agentId);
+    await db().from("audit_log").insert({ actor_id: p.id, action: "checkin.sent", object_type: "agent", object_id: agentId, detail: { channel: delivery.sent.includes("sms") ? "text" : "email", count: current.items.length, note: "Sent from Notique" } });
+    return { ...(await buildCheckin(p, agentId)), delivery };
+  },
+
+  /** Writes the first draft again, optionally with a short instruction from the VA. */
+  async redraftTask(ctx, args): Promise<TaskDraft | null> {
+    const p = staff(ctx);
+    const task = await loadTask(p, args.task_id);
+    if (!["received", "in_progress", "waiting"].includes(task.status)) throw new RpcError("Drafts are only written for open tickets.");
+    const existing = await loadDraft(task.id);
+    if (existing === undefined) throw new RpcError("AI drafts are not set up yet. Run the drafts and notifications migration in Supabase.", 503);
+    await writeDraft(task, optStr(args.instructions, 400));
+    return (await loadDraft(task.id)) ?? null;
+  },
+
+  /** Saves the VA's edited text as a draft deliverable on the ticket. Nothing reaches the user until the ticket is delivered. */
+  async saveTextDeliverable(ctx, args): Promise<FileRow> {
+    const p = staff(ctx);
+    const task = await loadTask(p, args.task_id);
+    if (!["received", "in_progress", "waiting"].includes(task.status)) throw new RpcError("This ticket is closed. Reload it before adding files.", 409);
+    const text = longText(args.text, "Text", 20000);
+    const name = (optStr(args.name, 120) ?? task.title).replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 100) || "Deliverable";
+    const path = `${task.agent_id}/${task.project_id}/${randomUUID()}-deliverable.txt`;
+    const up = await db().storage.from(BUCKET).upload(path, Buffer.from(text, "utf8"), { contentType: "text/plain; charset=utf-8" });
+    if (up.error) throw new RpcError(`Could not save the text: ${up.error.message}`, 500);
+    const row = q(
+      await db()
+        .from("files")
+        .insert({ project_id: task.project_id, task_id: task.id, kind: "deliverable", status: "draft", name: `${name}.txt`, path, size: Buffer.byteLength(text, "utf8"), mime: "text/plain", uploaded_by: p.id, uploaded_role: "va" })
+        .select("*")
+        .single(),
+    ) as any;
+    return (await decorateFiles([row]))[0];
+  },
 
   async vaCheckin(ctx, args): Promise<CheckinResult> {
     const p = staff(ctx);

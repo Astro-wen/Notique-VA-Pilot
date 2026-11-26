@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Check, ClipboardCopy, MessagesSquare } from "lucide-react";
+import { Check, ClipboardCopy, MessagesSquare, Send } from "lucide-react";
 import { rpc } from "@/lib/client/api";
 import { CHANNEL_LABEL, dateTime, taskNo } from "@/lib/client/format";
 import type { CheckinItem, CheckinResult } from "@/lib/types";
@@ -59,6 +59,23 @@ export function Checkin({ nav }: { nav: VaNav }) {
       setData(next);
       nav.refreshCounts();
       toast("Check-in logged for today.");
+    } catch (err) {
+      toast((err as Error).message, { tone: "error" });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function send(via: "email" | "sms" | "both") {
+    if (!message.trim()) return;
+    setBusy("send");
+    try {
+      const forUser = nav.agent.id;
+      const next = await rpc<CheckinResult & { delivery: { sent: string[]; failed: string[] } }>("sendCheckin", { agent_id: forUser, message, channel: via });
+      if (current.current !== forUser) return;
+      setData(next);
+      nav.refreshCounts();
+      toast(next.delivery.failed.length ? `Sent by ${next.delivery.sent.join(" and ")}. The ${next.delivery.failed.join(" and ")} did not go through.` : "Sent, and logged for today.", next.delivery.failed.length ? { tone: "error" } : undefined);
     } catch (err) {
       toast((err as Error).message, { tone: "error" });
     } finally {
@@ -169,7 +186,24 @@ export function Checkin({ nav }: { nav: VaNav }) {
                   setMessage(e.target.value);
                 }}
               />
-              <p className="mt-1.5 text-xs text-ink-3">Edit it to sound like you. Notique does not send it for you.</p>
+              <p className="mt-1.5 text-xs text-ink-3">
+                {data.reach.email || data.reach.sms ? `Edit it to sound like you, then send it from here${data.reach.email && data.reach.sms ? "" : data.reach.email ? " by email" : " by text"}, or copy it and send it yourself.` : "Edit it to sound like you. Copy it and send it from your own phone or email, then mark it done."}
+              </p>
+              {data.reach.email || data.reach.sms ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {data.reach.email ? (
+                    <Button size="sm" variant="primary" icon={<Send className="h-3.5 w-3.5" />} busy={busy === "send"} disabled={!message.trim()} onClick={() => send("email")}>
+                      Email {first}
+                    </Button>
+                  ) : null}
+                  {data.reach.sms ? (
+                    <Button size="sm" variant="primary" icon={<Send className="h-3.5 w-3.5" />} busy={busy === "send"} disabled={!message.trim()} onClick={() => send("sms")}>
+                      Text {first}
+                    </Button>
+                  ) : null}
+                  <span className="text-xs text-ink-3">{[data.reach.email ? data.reach.emailTo : null, data.reach.sms ? data.reach.smsTo : null].filter(Boolean).join(", ")}</span>
+                </div>
+              ) : null}
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Button size="sm" icon={<ClipboardCopy className="h-3.5 w-3.5" />} onClick={copy} disabled={!message.trim()}>
                   Copy message

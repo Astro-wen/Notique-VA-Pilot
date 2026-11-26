@@ -1,4 +1,4 @@
-import { reconcileEvents, runDueWatches } from "@/lib/server/rpc";
+import { reconcileEvents, runDueWatches, sendMorningBriefs } from "@/lib/server/rpc";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
@@ -17,8 +17,9 @@ export async function GET(request: Request) {
   }
   try {
     const events = await reconcileEvents().catch(() => ({ advanced: 0 }));
+    const briefs = await sendMorningBriefs().catch(() => ({ sent: 0, skipped: 0 }));
     const watches = await runDueWatches(150000);
-    return new Response(JSON.stringify({ ok: true, events, watches }), { headers: { "content-type": "application/json", "cache-control": "no-store" } });
+    return new Response(JSON.stringify({ ok: true, events, briefs, watches }), { headers: { "content-type": "application/json", "cache-control": "no-store" } });
   } catch (err) {
     console.error("daily job failed", err);
     return new Response(JSON.stringify({ error: "The daily job failed." }), { status: 500, headers: { "content-type": "application/json" } });

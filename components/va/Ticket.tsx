@@ -9,6 +9,7 @@ import { TaskThread } from "../TaskThread";
 import { Badge, Button, ErrorNote, Field, Input, Modal, Select, Spinner, Textarea, useLoad, useNow, useToast, type Tone } from "../ui";
 import type { VaNav } from "./Console";
 import { Coach, TOURS } from "../Coach";
+import { DraftPanel } from "./DraftPanel";
 
 export const STATUS_TONE: Record<TaskStatus, Tone> = { suggested: "neutral", received: "accent", in_progress: "dark", waiting: "warn", delivered: "ok", cancelled: "neutral", dismissed: "neutral" };
 
@@ -269,6 +270,8 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
           {!["delivered", "cancelled", "dismissed"].includes(task.status) ? <AddFile projectId={task.project_id} taskId={task.id} kind="attachment" label="Attach proof or a file" onAdded={() => reload(true)} /> : null}
         </div>
       </div>
+
+      {data.draft !== undefined ? <DraftPanel taskId={task.id} draft={data.draft ?? null} open={open} onSaved={() => reload(true)} onChanged={() => reload(true)} /> : null}
 
       <div data-tour="ticket-deliverables">
         <h3 className={label}>Deliverables</h3>
