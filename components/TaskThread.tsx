@@ -71,7 +71,7 @@ export function TaskThread({ taskId, messages, viewer, otherName, disabled, canA
             <div key={m.id} className={cx("flex flex-col", mine ? "items-end" : "items-start")}>
               <div className={cx("max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-sm", mine ? "bg-ink text-white" : "bg-page text-ink")}>{m.body}</div>
               <div className="mt-1 text-xs text-ink-3">
-                {m.sender_role === "agent" && !m.sender_id && viewer === "va" ? `${otherName}, logged from ${CHANNEL_LABEL[m.channel]?.toLowerCase() ?? m.channel}` : who}
+                {m.sender_role === "agent" && !m.sender_id ? (viewer === "va" ? `${otherName}, logged from ${CHANNEL_LABEL[m.channel]?.toLowerCase() ?? m.channel}` : `You, by ${m.channel === "call" ? "phone" : CHANNEL_LABEL[m.channel]?.toLowerCase() ?? m.channel}, noted by ${otherName}`) : who}
                 {", "}
                 {dateTime(m.created_at)}
               </div>
