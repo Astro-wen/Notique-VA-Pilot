@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { BadgeCheck, ChevronRight, Clock, FileText, Plus, Radar, Sparkles } from "lucide-react";
 import { rpc } from "@/lib/client/api";
-import { SOURCE_LABEL, dateOnly, dateTime, projectLine } from "@/lib/client/format";
+import { SOURCE_LABEL, dateOnly, dateTime, isPast, projectLine } from "@/lib/client/format";
 import type { EventRow, Fact, ProjectDetail, Task } from "@/lib/types";
 import { AddEventDialog } from "../AddEventDialog";
 import { DealFacts, FactRow } from "../DealFacts";
@@ -177,7 +177,7 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
             <div className="flex items-start gap-2 rounded-xl bg-accent-soft px-3.5 py-2.5 text-[13px] text-[#2f55cc]">
               <Clock className="mt-0.5 h-4 w-4 shrink-0" />
               <span>
-                {data.pendingEvents} new {data.pendingEvents === 1 ? "conversation is" : "conversations are"} being verified{data.va ? ` by ${vaName}` : ""}. {data.pendingDue && new Date(data.pendingDue).getTime() < Date.now() ? `It was due ${dateTime(data.pendingDue, tz, true)} and is running late.` : data.pendingDue ? `Ready by ${dateTime(data.pendingDue, tz, true)}.` : "Expect an update by 9:00 AM the next business day."}
+                {data.pendingEvents} new {data.pendingEvents === 1 ? "conversation is" : "conversations are"} being verified{data.va ? ` by ${vaName}` : ""}. {isPast(data.pendingDue) ? `It was due ${dateTime(data.pendingDue, tz, true)} and is running late.` : data.pendingDue ? `Ready by ${dateTime(data.pendingDue, tz, true)}.` : "Expect an update by 9:00 AM the next business day."}
                 {data.lastVerified && data.facts.length ? ` What you see below is from earlier conversations, last verified ${dateTime(data.lastVerified.at, tz)}.` : ""}
               </span>
             </div>

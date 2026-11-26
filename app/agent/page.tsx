@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FolderKanban, Plus } from "lucide-react";
 import { rpc } from "@/lib/client/api";
-import { ago, dateTime } from "@/lib/client/format";
+import { ago, dateTime, isPast } from "@/lib/client/format";
 import type { Project, ProjectListItem } from "@/lib/types";
 import { AddEventDialog } from "@/components/AddEventDialog";
 import { Authed, useSession } from "@/components/Session";
@@ -151,7 +151,7 @@ function AgentApp() {
                   {p.to_review ? <Badge tone="ok">{p.to_review} ready to review</Badge> : null}
                   {p.suggested ? <Badge tone="accent">{p.suggested} {p.suggested === 1 ? "suggestion" : "suggestions"}</Badge> : null}
                   {p.failed_events ? <Badge tone="bad">Could not read {p.failed_events === 1 ? "an upload" : `${p.failed_events} uploads`}</Badge> : null}
-                  {p.pending_events ? <Badge tone={p.verify_due && new Date(p.verify_due).getTime() < Date.now() ? "warn" : "neutral"}>{p.verify_due && new Date(p.verify_due).getTime() < Date.now() ? "Being verified, running late" : `Being verified${p.verify_due ? `, ready by ${dateTime(p.verify_due, me?.profile.timezone)}` : ""}`}</Badge> : null}
+                  {p.pending_events ? <Badge tone={isPast(p.verify_due) ? "warn" : "neutral"}>{isPast(p.verify_due) ? "Being verified, running late" : `Being verified${p.verify_due ? `, ready by ${dateTime(p.verify_due, me?.profile.timezone)}` : ""}`}</Badge> : null}
                   {p.in_progress ? <Badge>{p.in_progress} in progress</Badge> : null}
                 </button>
               ))}

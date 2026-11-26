@@ -146,3 +146,8 @@ const DEAL_LABEL: Record<string, string> = { buyer: "Buyer", seller: "Seller", o
 export function projectLine(p: { deal_type: string; area: string | null; budget: string | null }): string {
   return [DEAL_LABEL[p.deal_type] ?? p.deal_type, p.area, p.budget].filter(Boolean).join(", ")
 }
+
+/** True once the given time has passed. Re-evaluated whenever the screen re-renders after a refresh. */
+export function isPast(iso: string | null | undefined): boolean {
+  return !!iso && new Date(iso).getTime() < Date.now();
+}
