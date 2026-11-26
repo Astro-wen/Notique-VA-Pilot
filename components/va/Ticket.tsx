@@ -212,7 +212,7 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
               ))}
             </Select>
           </Field>
-          <Field label={`ETA (${tzAbbr(Intl.DateTimeFormat().resolvedOptions().timeZone)}, your time)`} hint={task.eta ? `User sees ${dateTime(task.eta, tz, true)}${etaLeft ? `, ${etaLeft.text.toLowerCase()}` : ""}` : "Set this first. The user sees it right away."}>
+          <Field label={`ETA (${tzAbbr(Intl.DateTimeFormat().resolvedOptions().timeZone)}, your time)`} hint={task.eta ? `User sees ${dateTime(task.eta, tz, true)}${task.status === "waiting" ? ", while you wait for the user" : etaLeft ? `, ${etaLeft.text.toLowerCase()}` : ""}` : "Set this first. The user sees it right away."}>
             <div className="flex gap-2" data-tour="ticket-eta">
               <Input className="min-w-0" type="datetime-local" value={eta} min={toLocalInput(null)} onChange={(e) => {
                 etaDirty.current = true;

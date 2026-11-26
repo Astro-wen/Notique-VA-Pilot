@@ -132,8 +132,29 @@ export function Input({ className, ...rest }: React.ComponentProps<"input">) {
   return <input className={cx(inputBase, "h-9", className)} {...rest} />;
 }
 
-export function Textarea({ className, ...rest }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className={cx(inputBase, "py-2 leading-relaxed", className)} {...rest} />;
+/** A field that opens already holding text puts the caret at the end, so new words do not land in front. */
+function caretToEnd(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) {
+  const el = e.currentTarget;
+  if (el.selectionStart === 0 && el.selectionEnd === 0 && el.value.length) {
+    try {
+      el.setSelectionRange(el.value.length, el.value.length);
+    } catch {
+      /* some input types have no caret */
+    }
+  }
+}
+
+export function Textarea({ className, onFocus, ...rest }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <textarea
+      className={cx(inputBase, "py-2 leading-relaxed", className)}
+      onFocus={(e) => {
+        if (rest.autoFocus) caretToEnd(e);
+        onFocus?.(e);
+      }}
+      {...rest}
+    />
+  );
 }
 
 export function Select({ className, children, ...rest }: React.SelectHTMLAttributes<HTMLSelectElement>) {

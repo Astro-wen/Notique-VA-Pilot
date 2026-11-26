@@ -115,7 +115,7 @@ export function Console() {
                 {agents.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name}
-                    {a.pending_events ? ` (${a.pending_events} to verify)` : ""}
+                    {(a.id === agent.id && counts ? counts.queue : a.pending_events) ? ` (${a.id === agent.id && counts ? counts.queue : a.pending_events} to verify)` : ""}
                   </option>
                 ))}
               </Select>

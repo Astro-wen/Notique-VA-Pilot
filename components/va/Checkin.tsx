@@ -214,7 +214,7 @@ export function Checkin({ nav }: { nav: VaNav }) {
                   <option value="email">I sent it by email</option>
                   <option value="call">I called instead</option>
                 </Select>
-                <Button size="sm" variant="primary" icon={<Check className="h-3.5 w-3.5" />} busy={busy === "done"} onClick={markDone}>
+                <Button size="sm" variant={data.doneToday ? "outline" : "primary"} icon={<Check className="h-3.5 w-3.5" />} busy={busy === "done"} onClick={markDone}>
                   {data.doneToday ? "Log again" : "Mark done for today"}
                 </Button>
               </div>

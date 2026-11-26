@@ -265,6 +265,7 @@ export function AddEventDialog({ open, onClose, projects, agentId, defaultProjec
             </button>
           </div>
         ) : null}
+        {kind === "audio" ? <p className="mt-1.5 text-xs text-ink-3">From iPhone Voice Memos: tap Share on the memo, choose Save to Files, then pick it here.</p> : null}
 
         {kind === "audio" ? (
           <label className="flex items-center gap-2 text-[13px] text-ink-2">

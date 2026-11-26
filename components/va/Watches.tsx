@@ -129,7 +129,15 @@ export function Watches({ projectId, watches, tz, onChanged, onOpenTicket }: { p
                   {w.status === "met" ? "Watch again" : "Resume"}
                 </Button>
               )}
-              <Button size="sm" variant="ghost" onClick={() => run(w, "updateWatch", { status: "closed" })}>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={async () => {
+                  const before = w.status;
+                  await run(w, "updateWatch", { status: "closed" });
+                  toast("Watch removed.", { action: { label: "Undo", run: () => void rpc("updateWatch", { watch_id: w.id, status: before }).then(onChanged).catch(() => {}) } });
+                }}
+              >
                 Remove
               </Button>
             </div>

@@ -291,7 +291,7 @@ function AdminPage() {
         }
       >
         <div className="space-y-4">
-          <Field label="Name" hint="Users see their assistant's first name.">
+          <Field label="Name" hint={edit?.role === "va" ? "Users see their assistant's first name." : undefined}>
             <Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
           </Field>
           <Field label="Company" hint="Optional">
