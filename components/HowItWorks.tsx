@@ -23,21 +23,21 @@ interface Node {
   stage: number;
   lane: Lane;
   title: string;
-  lines: [string, string];
+  lines: string[];
 }
 const LANE_Y: Record<Lane, number> = { user: UY, ai: AY, va: VY };
 const LANE_COLOR: Record<Lane, string> = { user: US, ai: AI, va: VA };
 
 const NODES: Node[] = [
-  { stage: 0, lane: "user", title: "Add conversation", lines: ["Recording, transcript,", "text thread, or typed note"] },
-  { stage: 0, lane: "ai", title: "Transcribe and draft facts", lines: ["Every fact is tied to", "the exact quote"] },
-  { stage: 1, lane: "va", title: "Verify in Queue", lines: ["Approve, Edit or Decline each", "fact. Tick 4 checks. Submit."] },
-  { stage: 2, lane: "user", title: "Deal status and Timeline", lines: ["Only verified facts, plus", "suggested follow-ups"] },
-  { stage: 3, lane: "user", title: "Send a request", lines: ["Tap Send on a suggestion,", "or Submit a request"] },
-  { stage: 3, lane: "ai", title: "Write a first draft", lines: ["From verified facts.", "Only the VA sees it."] },
-  { stage: 4, lane: "va", title: "Work the ticket", lines: ["Set ETA, finish the draft,", "Mark delivered"] },
-  { stage: 4, lane: "user", title: "Answer questions", lines: ["In the request thread", "when the VA asks"] },
-  { stage: 5, lane: "user", title: "Review and send", lines: ["User sends it to the client.", "Used as is, Edited, Not used"] },
+  { stage: 0, lane: "user", title: "Add a conversation", lines: ["After meeting a client, the user", "uploads the recording, a text", "thread, or a typed note."] },
+  { stage: 0, lane: "ai", title: "Draft the facts", lines: ["AI writes down what was said", "and pulls out the key facts,", "each linked to its quote."] },
+  { stage: 1, lane: "va", title: "Check every fact", lines: ["The VA reads each fact next to", "its quote, fixes or removes", "what is wrong, then submits."] },
+  { stage: 2, lane: "user", title: "See what changed", lines: ["The user sees only the facts", "the VA checked, plus a few", "suggested follow-ups."] },
+  { stage: 3, lane: "user", title: "Ask for help", lines: ["The user taps Send on a", "suggestion, or writes what", "they need in their own words."] },
+  { stage: 3, lane: "ai", title: "Write a first draft", lines: ["AI drafts the work from the", "checked facts. Only the VA", "can see this draft."] },
+  { stage: 4, lane: "va", title: "Do the work", lines: ["The VA says when it will be", "ready, finishes the draft,", "and delivers it."] },
+  { stage: 4, lane: "user", title: "Answer a question", lines: ["If the VA gets stuck, they ask.", "The user replies in the", "same thread."] },
+  { stage: 5, lane: "user", title: "Review and send", lines: ["The user reads it, sends it to", "the client, and says whether", "it was useful."] },
 ];
 
 interface Edge {
@@ -51,15 +51,15 @@ interface Edge {
 const g1 = bx(1) + BW + 16;
 const g5 = bx(4) + BW + 16;
 const EDGES: Edge[] = [
-  { d: `M${cxOf(0)},${UY + BH} V${AY - 3}`, stages: [0], label: { x: cxOf(0) + 8, y: UY + BH + 33, text: "upload" } },
-  { d: `M${bx(0) + BW},${AY + BH / 2} H${cxOf(1)} V${VY - 3}`, stages: [0, 1], label: { x: bx(0) + BW + 8, y: AY + BH / 2 - 7, text: "drafts to check" } },
-  { d: `M${bx(1) + BW},${VY + BH / 2} H${g1} V${UY + BH / 2} H${bx(2) - 3}`, handoff: true, stages: [1, 2], label: { x: g1 + 8, y: AY + BH / 2 + 4, text: "Submit publishes" } },
+  { d: `M${cxOf(0)},${UY + BH} V${AY - 3}`, stages: [0], label: { x: cxOf(0) + 8, y: UY + BH + 33, text: "the file goes to AI" } },
+  { d: `M${bx(0) + BW},${AY + BH / 2} H${cxOf(1)} V${VY - 3}`, stages: [0, 1], label: { x: bx(0) + BW + 8, y: AY + BH / 2 - 7, text: "the VA gets the draft" } },
+  { d: `M${bx(1) + BW},${VY + BH / 2} H${g1} V${UY + BH / 2} H${bx(2) - 3}`, handoff: true, stages: [1, 2], label: { x: g1 + 8, y: AY + BH / 2 + 4, text: "the VA submits" } },
   { d: `M${bx(2) + BW},${UY + BH / 2} H${bx(3) - 3}`, stages: [2, 3] },
-  { d: `M${cxOf(3)},${UY + BH} V${AY - 3}`, handoff: true, stages: [3], label: { x: cxOf(3) + 8, y: UY + BH + 33, text: "ticket opens for the VA" } },
-  { d: `M${bx(3) + BW},${AY + BH / 2} H${cxOf(4) - 44} V${VY - 3}`, stages: [3, 4], label: { x: bx(3) + BW + 8, y: AY + BH / 2 - 7, text: "draft ready" } },
-  { d: `M${cxOf(4) + 44},${VY - 4} V${UY + BH + 4}`, handoff: true, both: true, stages: [4], label: { x: cxOf(4) + 36, y: UY + BH + 33, text: "question and answer", end: true } },
-  { d: `M${bx(4) + BW},${VY + 26} H${g5} V${UY + BH / 2} H${bx(5) - 3}`, handoff: true, stages: [4, 5], label: { x: g5 + 8, y: VY - 20, text: "Mark delivered" } },
-  { d: `M${cxOf(5) + 40},${UY + BH} V${VY + 62} H${bx(4) + BW + 3}`, handoff: true, stages: [5, 4], label: { x: cxOf(5) + 48, y: AY + BH + 26, text: "Ask for changes" } },
+  { d: `M${cxOf(3)},${UY + BH} V${AY - 3}`, handoff: true, stages: [3], label: { x: cxOf(3) + 8, y: UY + BH + 33, text: "this becomes a ticket" } },
+  { d: `M${bx(3) + BW},${AY + BH / 2} H${cxOf(4) - 44} V${VY - 3}`, stages: [3, 4], label: { x: bx(3) + BW + 8, y: AY + BH / 2 - 7, text: "the VA gets the draft" } },
+  { d: `M${cxOf(4) + 44},${VY - 4} V${UY + BH + 4}`, handoff: true, both: true, stages: [4], label: { x: cxOf(4) + 36, y: UY + BH + 33, text: "they talk here", end: true } },
+  { d: `M${bx(4) + BW},${VY + 26} H${g5} V${UY + BH / 2} H${bx(5) - 3}`, handoff: true, stages: [4, 5], label: { x: g5 + 8, y: VY - 20, text: "the VA delivers" } },
+  { d: `M${cxOf(5) + 40},${UY + BH} V${VY + 62} H${bx(4) + BW + 3}`, handoff: true, stages: [5, 4], label: { x: cxOf(5) + 48, y: AY + BH + 26, text: "asks for changes" } },
 ];
 
 interface StageInfo {
@@ -81,7 +81,7 @@ const STAGES: StageInfo[] = [
     ai: "Transcribes audio with speakers and timestamps, then drafts facts in six sections. Every draft points at the exact lines it came from.",
     va: "Nothing yet. The VA can also add material the user sent by text or email.",
     meet: "No hand-off. The user sees a notice that the conversation is being checked.",
-    clicks: [{ who: "User", steps: "Add conversation, choose the type, pick the client, add the file or paste text, Send" }],
+    clicks: [{ who: "User", steps: "Tap Add conversation, choose what you are adding, pick the client, attach the file or paste the text, then tap Send." }],
     userHref: "/agent",
     vaHref: "/va?view=sources",
   },
@@ -92,7 +92,7 @@ const STAGES: StageInfo[] = [
     ai: "Marks how sure it is about each draft. Drafts it is unsure about cannot be approved without editing.",
     va: "Reads each draft next to its quote. Approves, edits, declines, or asks the user. Ticks four checks: consent, personal data, fair housing, right client. Submits.",
     meet: "Submit is the hand-off. Due 9:00 AM the next business day in the user's time zone.",
-    clicks: [{ who: "VA", steps: "Queue, Verify, decide every draft (A, E, D, I), tick the four checks, Submit, Submit to user" }],
+    clicks: [{ who: "VA", steps: "Open Queue and click Verify. For each fact, choose Approve, Edit, Decline or Ask user. Tick the four checks, then click Submit." }],
     vaHref: "/va",
   },
   {
@@ -102,7 +102,7 @@ const STAGES: StageInfo[] = [
     ai: "Nothing. AI text that a VA has not checked never appears here.",
     va: "Can preview exactly what the user sees with User view.",
     meet: "The facts and the suggested follow-ups arrive together. Anything that needs the user is listed first under Waiting on you.",
-    clicks: [{ who: "User", steps: "Open the client, read Deal status, tap a source to see the quote" }],
+    clicks: [{ who: "User", steps: "Open the client and read Deal status. Tap the source under any line to see the exact quote." }],
     userHref: "/agent",
     vaHref: "/va?view=projects",
   },
@@ -114,8 +114,8 @@ const STAGES: StageInfo[] = [
     va: "Gets a ticket. If the user asked by text or email, the VA logs the ticket and attaches a screenshot as proof.",
     meet: "The request becomes a ticket. Same item, two names: Request for the user, Ticket for the VA.",
     clicks: [
-      { who: "User", steps: "Requests, Send on a suggestion. Or Submit a request, describe it, Submit request" },
-      { who: "VA", steps: "If asked outside the app: project, New ticket for the user, attach the screenshot, Create ticket" },
+      { who: "User", steps: "Open Requests and tap Send on a suggestion. Or tap Submit a request and describe what you need." },
+      { who: "VA", steps: "If the user asked by text or email, open the project, click New ticket for the user, and attach a screenshot of the message." },
     ],
     userHref: "/agent",
     vaHref: "/va?view=tasks",
@@ -128,8 +128,8 @@ const STAGES: StageInfo[] = [
     va: "Sets the ETA, completes the draft, checks every fact, saves it to Deliverables, and marks the ticket delivered. Never contacts the client.",
     meet: "Two hand-offs. Ask user and pause sends a question and the user's answer resumes the ticket. Mark delivered sends the result.",
     clicks: [
-      { who: "VA", steps: "Open the ticket, set the ETA, edit the AI first draft, Save to deliverables, Mark delivered, Deliver" },
-      { who: "User", steps: "Open the request, type the answer, Send" },
+      { who: "VA", steps: "Open the ticket and set the ETA. Edit the AI first draft, click Save to deliverables, then click Mark delivered." },
+      { who: "User", steps: "Open the request, type your answer, and tap Send." },
     ],
     userHref: "/agent",
     vaHref: "/va?view=tasks",
@@ -141,17 +141,17 @@ const STAGES: StageInfo[] = [
     ai: "Nothing.",
     va: "Sees the feedback. A request for changes reopens the ticket.",
     meet: "Feedback closes the loop. It is also how the pilot measures whether the work was good enough to send.",
-    clicks: [{ who: "User", steps: "Waiting on you, Review, open the file, then Used as is, Edited it, Not used, or Ask for changes" }],
+    clicks: [{ who: "User", steps: "Open the delivery under Waiting on you and read the file. Then tap Used as is, Edited it, or Not used. Tap Ask for changes to send it back." }],
     userHref: "/agent",
     vaHref: "/va?view=tasks",
   },
 ];
 
-const DAILY: { title: string; lane: Lane; planned?: boolean; lines: [string, string]; detail: string }[] = [
-  { title: "Check-in", lane: "va", lines: ["VA messages the user what is", "still open, offers to take it over"], detail: "Once a day the VA opens Check-in. It lists everything waiting on the user and writes the message. The VA sends it and marks it done. When the user says yes to something, one button turns it into a ticket." },
-  { title: "Watches", lane: "ai", lines: ["AI checks a market condition the", "VA set. A hit opens a ticket."], detail: "The VA writes a condition for a client, such as a mortgage rate or a listing price. It is checked against the live web every day. When it becomes true a ticket opens with the sources and a drafted note, for the VA to check and deliver." },
-  { title: "Email and text alerts", lane: "ai", planned: true, lines: ["Delivery ready, question waiting,", "morning brief. Built, not switched on."], detail: "The product can email or text the user when a delivery is ready or a question is waiting, and send a morning brief. It is built and off. It needs the sending accounts connected and each user's agreement." },
-  { title: "Recorder auto-sync", lane: "ai", planned: true, lines: ["Recordings arrive from the", "Notique app without uploading."], detail: "Today the user or the VA uploads each recording. The plan is for recordings made with the Notique recorder to arrive on their own." },
+const DAILY: { title: string; lane: Lane; planned?: boolean; lines: string[]; detail: string }[] = [
+  { title: "Check-in", lane: "va", lines: ["Once a day the VA asks the user what is still", "open and offers to take it off their plate."], detail: "Once a day the VA opens Check-in. It lists everything waiting on the user and writes the message. The VA sends it and marks it done. When the user says yes to something, one button turns it into a ticket." },
+  { title: "Watches", lane: "ai", lines: ["The VA sets a condition, like a rate dropping.", "AI checks daily and opens a ticket when it happens."], detail: "The VA writes a condition for a client, such as a mortgage rate or a listing price. It is checked against the live web every day. When it becomes true a ticket opens with the sources and a drafted note, for the VA to check and deliver." },
+  { title: "Email and text alerts", lane: "ai", planned: true, lines: ["The user gets an email or text when something", "is ready. It is built but not switched on yet."], detail: "The product can email or text the user when a delivery is ready or a question is waiting, and send a morning brief. It is built and off. It needs the sending accounts connected and each user's agreement." },
+  { title: "Recorder auto-sync", lane: "ai", planned: true, lines: ["Recordings from the Notique recorder will", "arrive on their own, with no uploading."], detail: "Today the user or the VA uploads each recording. The plan is for recordings made with the Notique recorder to arrive on their own." },
 ];
 
 /** Interactive left to right picture of how one conversation becomes a finished follow-up. */
@@ -191,7 +191,7 @@ export function HowItWorks({ role }: { role: "agent" | "va" | "admin" }) {
       </div>
 
       <div className="mt-3 overflow-x-auto rounded-xl border border-line bg-white p-2">
-        <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full min-w-[1040px] text-ink" role="img" aria-label="How Notique works: the user adds a conversation, AI drafts facts, the VA verifies and publishes, the user sends a request, AI writes a first draft, the VA delivers, and the user reviews.">
+        <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full min-w-[1040px] text-ink" role="img" aria-label="How Notique works: the user adds a conversation, AI drafts the facts, the VA checks them and submits, the user asks for help, AI writes a first draft, the VA does the work and delivers it, and the user reviews and sends it.">
           <defs>
             <marker id="hw-n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M0,0 L10,5 L0,10 z" fill="currentColor" fillOpacity="0.7" />
@@ -268,11 +268,11 @@ export function HowItWorks({ role }: { role: "agent" | "va" | "admin" }) {
                 }}
               >
                 <rect x={x} y={y} width={BW} height={BH} rx={10} fill={c} fillOpacity={on ? 0.22 : 0.13} stroke={c} strokeWidth={on ? 2.4 : 1.5} />
-                <text x={x + 14} y={y + 25} fontSize={13.5} fontWeight={700} fill="currentColor">
+                <text x={x + 14} y={y + 23} fontSize={13.5} fontWeight={700} fill="currentColor">
                   {n.title}
                 </text>
                 {n.lines.map((l, k) => (
-                  <text key={k} x={x + 14} y={y + 44 + k * 16} fontSize={11.5} fill="currentColor" fillOpacity={0.75}>
+                  <text key={k} x={x + 14} y={y + 43 + k * 15} fontSize={11.5} fill="currentColor" fillOpacity={0.75}>
                     {l}
                   </text>
                 ))}
