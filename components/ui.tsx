@@ -171,15 +171,33 @@ export function Tabs<T extends string>({ tabs, value, onChange, className }: { t
 
 /* ---------- Modal ---------- */
 
+/** True while an input method editor is mid-composition, when Enter and Escape belong to the IME. */
+export function composing(e: { isComposing?: boolean; keyCode?: number; nativeEvent?: { isComposing?: boolean; keyCode?: number } }): boolean {
+  const n = e.nativeEvent ?? e;
+  return !!n.isComposing || n.keyCode === 229;
+}
+
+/** True when the keyboard focus is in a field the user types into. */
+export function isTyping(target: EventTarget | null = typeof document === "undefined" ? null : document.activeElement): boolean {
+  const el = target as HTMLElement | null;
+  if (!el || !el.tagName) return false;
+  if (el.tagName === "INPUT") return !["checkbox", "radio", "button", "range", "file"].includes((el as HTMLInputElement).type);
+  return ["TEXTAREA", "SELECT"].includes(el.tagName) || el.isContentEditable;
+}
+
 export function Modal({ open, onClose, title, children, footer, wide }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode; footer?: React.ReactNode; wide?: boolean }) {
   const titleId = useId();
   const ref = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  const dirty = useRef(false);
   useEffect(() => {
     if (!open) return;
+    dirty.current = false;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      // Escape while an input method is composing (Chinese, Japanese, Korean) cancels the candidate, not the dialog.
+      if (composing(e)) return;
       const dialogs = Array.from(document.querySelectorAll("[data-modal]"));
       const mine = ref.current?.closest("[data-modal]");
       if (dialogs.length && dialogs[dialogs.length - 1] !== mine && !mine?.contains(dialogs[dialogs.length - 1]) ) return;
@@ -199,8 +217,8 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
   }, [open]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" data-modal onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId} className={cx("rise flex max-h-[92vh] w-full flex-col rounded-t-2xl bg-white shadow-xl sm:rounded-xl", wide ? "sm:max-w-2xl" : "sm:max-w-md")}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" data-modal onMouseDown={(e) => e.target === e.currentTarget && !dirty.current && onClose()}>
+      <div ref={ref} onInput={() => (dirty.current = true)} role="dialog" aria-modal="true" aria-labelledby={titleId} className={cx("rise flex max-h-[92vh] w-full flex-col rounded-t-2xl bg-white shadow-xl sm:rounded-xl", wide ? "sm:max-w-2xl" : "sm:max-w-md")}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
           <h2 id={titleId} className="text-base font-semibold">
             {title}

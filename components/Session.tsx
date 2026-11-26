@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { rpc, supabase, ApiError } from "@/lib/client/api";
 import type { MeResult, Role } from "@/lib/types";
@@ -20,15 +20,19 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [me, setMe] = useState<MeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const hasMe = useRef(false);
+
   const refresh = useCallback(async () => {
     const session = (await supabase().auth.getSession()).data.session;
     if (!session) {
+      hasMe.current = false;
       setMe(null);
       setStatus("anon");
       return;
     }
     try {
       const result = await rpc<MeResult>("me");
+      hasMe.current = true;
       setMe(result);
       setError(null);
       setStatus("ready");
@@ -39,6 +43,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         setStatus("error");
         return;
       }
+      // A passing network or server hiccup must not tear down the page someone is working in.
+      if (hasMe.current) return;
       setError((err as Error).message);
       setStatus("error");
     }

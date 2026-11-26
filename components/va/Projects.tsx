@@ -24,7 +24,9 @@ function ProjectDialog({ open, onClose, agentId, project, onSaved }: { open: boo
     setDeal(project?.deal_type ?? "buyer");
     setArea(project?.area ?? "");
     setBudget(project?.budget ?? "");
-  }, [open, project]);
+    // Not on every background refresh of the project, which would wipe what is being typed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, project?.id]);
   async function save() {
     if (!name.trim()) return toast("Enter the client name.", { tone: "error" });
     setBusy(true);

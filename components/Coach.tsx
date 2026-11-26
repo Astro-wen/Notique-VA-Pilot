@@ -1,8 +1,8 @@
 "use client";
-import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { rpc } from "@/lib/client/api";
 import { useSession } from "./Session";
-import { Button, cx } from "./ui";
+import { Button, composing, cx, isTyping } from "./ui";
 
 export interface CoachStep {
   /** Value of a data-tour attribute. Omit for a centered card. */
@@ -63,12 +63,29 @@ export function Coach({ name, steps, ready = true, primary }: { name: string; st
   const usable = useCallback(() => steps.filter((s) => !s.target || findTarget(s.target)), [steps]);
   const [list, setList] = useState<CoachStep[]>([]);
 
+  const retry = useRef<number | null>(null);
+  const startRef = useRef<() => void>(() => {});
   const start = useCallback(() => {
+    // Never cover a dialog or interrupt someone who is typing. Try again once they are done.
+    if (document.querySelector("[data-modal]") || isTyping()) {
+      if (retry.current) window.clearTimeout(retry.current);
+      retry.current = window.setTimeout(() => startRef.current(), 2000);
+      return;
+    }
     const next = usable();
     if (next.length === 0) return;
     setList(next);
     setIndex(0);
   }, [usable]);
+  useEffect(() => {
+    startRef.current = start;
+  }, [start]);
+  useEffect(
+    () => () => {
+      if (retry.current) window.clearTimeout(retry.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!ready || !userId) return;
@@ -147,6 +164,7 @@ export function Coach({ name, steps, ready = true, primary }: { name: string; st
   useEffect(() => {
     if (index === null) return;
     const onKey = (e: KeyboardEvent) => {
+      if (composing(e) || isTyping(e.target)) return;
       if (e.key === "Escape") finish();
       else if (e.key === "ArrowRight" || e.key === "Enter") {
         e.preventDefault();

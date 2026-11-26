@@ -4,7 +4,7 @@ import { ArrowLeft, Check, CircleHelp, Flag, Pencil, Plus, Quote, RotateCcw, Sea
 import { rpc } from "@/lib/client/api";
 import { SOURCE_LABEL, clock, dateTime, plainDate, remaining } from "@/lib/client/format";
 import { SECTIONS, TASK_CATEGORIES, type EventChecks, type EventDetail, type Fact, type Section, type SuggestedTask, type Verdict } from "@/lib/types";
-import { Badge, Button, ErrorNote, Field, IconButton, Input, Kbd, Modal, Select, Spinner, Textarea, cx, useToast } from "../ui";
+import { Badge, Button, ErrorNote, Field, IconButton, Input, Kbd, Modal, Select, Spinner, Textarea, composing, cx, isTyping, useToast } from "../ui";
 import type { VaNav } from "./Console";
 import { Coach, TOURS } from "../Coach";
 
@@ -28,12 +28,6 @@ function confidenceLabel(c: number | null): { text: string; tone: "ok" | "warn" 
 
 const PROTECTED = /\b(wife|husband|spouse|married|single (mom|mother|dad|father|parent)|divorc\w*|pregnan\w*|kids?|child(ren)?|son|daughter|baby|famil(y|ies)|veteran|military|disab\w*|wheelchair|religio\w*|church|mosque|temple|synagogue|christian|muslim|jewish|hindu|race|ethnic\w*|nationality|immigra\w*|elderly|retire[de]?|gay|lesbian|transgender)\b/i;
 
-function typing(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  if (!el) return false;
-  if (el.tagName === "INPUT") return !["checkbox", "radio", "button", "range"].includes((el as HTMLInputElement).type);
-  return ["TEXTAREA", "SELECT"].includes(el.tagName) || el.isContentEditable;
-}
 
 interface Draft {
   section: Section;
@@ -323,9 +317,9 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
   /* Keyboard shortcuts. */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.metaKey || e.ctrlKey || e.altKey || composing(e)) return;
       if (document.querySelector("[data-modal]")) return;
-      if (typing(e.target)) {
+      if (isTyping(e.target)) {
         if (e.key === "Escape") (e.target as HTMLElement).blur();
         return;
       }
@@ -478,7 +472,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                       className="!h-7 !w-36 !text-xs"
                       onBlur={(e) => renameSpeaker(raw, e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                        if (e.key === "Enter" && !composing(e)) (e.target as HTMLInputElement).blur();
                         if (e.key === "Escape") setRenaming(null);
                       }}
                     />
@@ -555,7 +549,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                         </option>
                       ))}
                     </Select>
-                    <Input autoFocus aria-label="Fact" placeholder="State the fact in one sentence" value={adding.statement} onChange={(e) => setAdding({ ...adding, statement: e.target.value })} onKeyDown={(e) => e.key === "Enter" && addFact()} />
+                    <Input autoFocus aria-label="Fact" placeholder="State the fact in one sentence" value={adding.statement} onChange={(e) => setAdding({ ...adding, statement: e.target.value })} onKeyDown={(e) => e.key === "Enter" && !composing(e) && addFact()} />
                   </div>
                   <div className="flex justify-end gap-2">
                     <Button size="sm" onClick={() => setAdding(null)}>
@@ -667,7 +661,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                                   ))}
                                 </Select>
                               </Field>
-                              <Textarea autoFocus rows={2} aria-label="Statement" value={draft.statement} onChange={(e) => setDraft({ ...draft, statement: e.target.value })} onKeyDown={(e) => e.key === "Enter" && (e.metaKey || e.ctrlKey) && saveEdit(f)} />
+                              <Textarea autoFocus rows={2} aria-label="Statement" value={draft.statement} onChange={(e) => setDraft({ ...draft, statement: e.target.value })} onKeyDown={(e) => e.key === "Enter" && !composing(e) && (e.metaKey || e.ctrlKey) && saveEdit(f)} />
                               <div className="grid gap-3 sm:grid-cols-2">
                                 <Field label="Follow up on" hint="Optional date">
                                   <Input type="date" value={draft.follow_up_date} onChange={(e) => setDraft({ ...draft, follow_up_date: e.target.value })} />

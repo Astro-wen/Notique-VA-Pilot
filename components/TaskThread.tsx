@@ -4,7 +4,7 @@ import { Send } from "lucide-react";
 import { rpc } from "@/lib/client/api";
 import { CHANNEL_LABEL, dateTime } from "@/lib/client/format";
 import type { TaskMessage } from "@/lib/types";
-import { Button, Select, Textarea, cx, useToast } from "./ui";
+import { Button, Select, Textarea, composing, cx, useToast } from "./ui";
 
 interface Props {
   taskId: string;
@@ -105,7 +105,7 @@ export function TaskThread({ taskId, messages, viewer, otherName, disabled, canA
             onChange={(e) => setBody(e.target.value)}
             placeholder={viewer === "va" ? (mode === "log" ? "Paste or summarise what the user said" : "Write to the user") : `Message ${otherName}`}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send(false);
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !composing(e)) send(false);
             }}
           />
           <div className="mt-2 flex items-center justify-end gap-2">

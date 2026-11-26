@@ -29,7 +29,10 @@ export function TaskFormDialog({ open, onClose, projectId, task, onSaved, projec
     setTitle(task?.title ?? "");
     setDescription(task?.description ?? "");
     setCategory(task?.category ?? "Research");
-  }, [open, task]);
+    // Only when the dialog opens or a different request is edited. The parent refreshes in the
+    // background and hands in a new object each time, which must never wipe what is being typed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, task?.id]);
   async function save() {
     if (!task && !pid) return toast("Choose which client this is for.", { tone: "error" });
     if (!title.trim() || !description.trim()) return toast("Say what you need and add a few details.", { tone: "error" });
