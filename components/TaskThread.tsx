@@ -19,9 +19,12 @@ interface Props {
 /** Conversation between the user and the VA on one task. */
 export function TaskThread({ taskId, messages, viewer, otherName, disabled, canAsk, onSent }: Props) {
   const toast = useToast();
-  const [body, setBody] = useState("");
+  // Each mode keeps its own text, so words typed as the VA never get filed as the user's reply, or the reverse.
+  const [bodies, setBodies] = useState<{ send: string; log: string }>({ send: "", log: "" });
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<"send" | "log">("send");
+  const body = bodies[mode];
+  const setBody = (next: string | ((cur: string) => string)) => setBodies((b) => ({ ...b, [mode]: typeof next === "function" ? next(b[mode]) : next }));
   const [channel, setChannel] = useState("text");
   const endRef = useRef<HTMLDivElement>(null);
   const count = messages.length;
@@ -45,6 +48,11 @@ export function TaskThread({ taskId, messages, viewer, otherName, disabled, canA
       });
       // Clear only the text that went out. Anything typed while it was sending stays.
       setBody((cur) => (cur === sent ? "" : cur.startsWith(sent) ? cur.slice(sent.length).trimStart() : cur));
+      // After logging the user's reply, go back to writing as yourself.
+      if (mode === "log") {
+        setMode("send");
+        toast(`Logged as ${otherName}'s reply.`);
+      }
       onSent();
     } catch (err) {
       toast((err as Error).message, { tone: "error" });

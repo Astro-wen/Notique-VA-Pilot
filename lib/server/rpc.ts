@@ -1516,8 +1516,9 @@ export const handlers: Record<string, Handler> = {
       processing,
       ticketsDue: await decorateTasks(openTasks.slice(0, 12)),
       stats: {
-        dueSoon: events.filter((e) => e.due_at && new Date(e.due_at).getTime() - now < 2 * 3600 * 1000).length,
-        dueToday: events.filter((e) => e.due_at && new Date(e.due_at).getTime() < endOfDay).length,
+        overdue: events.filter((e) => e.due_at && new Date(e.due_at).getTime() < now).length,
+        dueSoon: events.filter((e) => e.due_at && new Date(e.due_at).getTime() >= now && new Date(e.due_at).getTime() - now < 2 * 3600 * 1000).length,
+        dueToday: events.filter((e) => e.due_at && new Date(e.due_at).getTime() >= now && new Date(e.due_at).getTime() < endOfDay).length,
         verifiedThisWeek: verified.count ?? 0,
       },
       sources,
@@ -1694,7 +1695,11 @@ export const handlers: Record<string, Handler> = {
     const event = await loadEvent(p, args.event_id);
     if (event.status === "submitted") throw new RpcError("This event is already submitted.");
     if (!["ready", "in_review"].includes(event.status)) throw new RpcError("This event is not ready to submit.");
-    const checks = event.checks ?? {};
+    // The screen sends the checks it shows, so a tick still on its way cannot block or change the submit.
+    const checks = { ...(event.checks ?? {}) } as Record<string, boolean>;
+    if (args.checks && typeof args.checks === "object") {
+      for (const key of ["consent", "pii", "fair_housing", "type_match"]) if (typeof args.checks[key] === "boolean") checks[key] = args.checks[key];
+    }
     const missing = (["consent", "pii", "fair_housing", "type_match"] as const).filter((k) => !checks[k]);
     if (missing.length) throw new RpcError("Confirm all four checks at the top of the page before submitting.");
     const precheck = q(await db().from("facts").select("verdict").eq("event_id", event.id)) as any[];
@@ -1706,7 +1711,7 @@ export const handlers: Record<string, Handler> = {
     const claimed = q(
       await db()
         .from("events")
-        .update({ status: "submitted", status_changed_at: now, submitted_at: now, submitted_by: p.id })
+        .update({ status: "submitted", status_changed_at: now, submitted_at: now, submitted_by: p.id, checks })
         .eq("id", event.id)
         .in("status", ["ready", "in_review"])
         .select("id"),
@@ -2101,6 +2106,16 @@ export const handlers: Record<string, Handler> = {
   },
 
   /** Writes the first draft again, optionally with a short instruction from the VA. */
+  /** Keeps the VA's edits to the AI first draft, so a reload or a switch to another ticket loses nothing. */
+  async saveDraftText(ctx, args) {
+    const p = staff(ctx);
+    const task = await loadTask(p, args.task_id);
+    if (typeof args.body !== "string") throw new RpcError("Nothing to save.");
+    const rows = q(await db().from("task_drafts").update({ body: args.body.slice(0, 20000) }).eq("task_id", task.id).eq("status", "ready").select("task_id")) as any[];
+    if (rows.length === 0) throw new RpcError("The draft is being rewritten right now, so this edit was not saved.", 409);
+    return { ok: true };
+  },
+
   async redraftTask(ctx, args): Promise<TaskDraft | null> {
     const p = staff(ctx);
     const task = await loadTask(p, args.task_id);

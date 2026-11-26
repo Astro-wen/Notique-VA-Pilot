@@ -69,6 +69,8 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
   const [summaryDraft, setSummaryDraft] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const unsent = useRef(0);
+  const checksRef = useRef<EventChecks | null>(null);
+  const checkQueue = useRef<Promise<unknown>>(Promise.resolve());
   const saving = useRef<Record<string, Promise<boolean>>>({});
   const audioRef = useRef<HTMLAudioElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -76,6 +78,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
   const load = useCallback(async () => {
     try {
       const data = await rpc<EventDetail>("getEvent", { event_id: eventId });
+      checksRef.current = data.event.checks ?? {};
       setDetail(data);
       setError(null);
       setFocusId((cur) => cur ?? data.facts.find((f) => f.verdict === "pending")?.id ?? data.facts[0]?.id ?? null);
@@ -218,15 +221,18 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
     window.setTimeout(() => setHot((cur) => (cur === lineId ? null : cur)), 1800);
   }
 
-  async function setCheck(key: keyof EventChecks, value: boolean) {
+  function setCheck(key: keyof EventChecks, value: boolean) {
     if (!detail || readOnly) return;
-    setDetail((d) => (d ? { ...d, event: { ...d.event, checks: { ...(d.event.checks ?? {}), [key]: value } } } : d));
-    try {
-      await rpc("updateEventMeta", { event_id: eventId, checks: { [key]: value } });
-    } catch (err) {
-      toast((err as Error).message, { tone: "error" });
-      load();
-    }
+    // Send the whole set every time, one request after another, so fast clicks can never undo each other.
+    const next = { ...(checksRef.current ?? {}), [key]: value } as EventChecks;
+    checksRef.current = next;
+    setDetail((d) => (d ? { ...d, event: { ...d.event, checks: next } } : d));
+    checkQueue.current = checkQueue.current.then(() =>
+      rpc("updateEventMeta", { event_id: eventId, checks: next }).catch((err) => {
+        toast((err as Error).message, { tone: "error" });
+        load();
+      }),
+    );
   }
 
   async function saveSummary() {
@@ -298,8 +304,9 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
         unsent.current = 0;
         await rpc("updateEventMeta", { event_id: eventId, add_ms: ms }).catch(() => {});
       }
-      const res = await rpc<{ suggested_tasks: number; accepted: number }>("submitEvent", { event_id: eventId });
-      toast(`Submitted. ${res.accepted} ${res.accepted === 1 ? "fact" : "facts"} published${res.suggested_tasks ? `, ${res.suggested_tasks} ${res.suggested_tasks === 1 ? "task" : "tasks"} suggested to the user` : ""}.`);
+      await checkQueue.current;
+      const res = await rpc<{ suggested_tasks: number; accepted: number }>("submitEvent", { event_id: eventId, checks: checksRef.current ?? undefined });
+      toast(`Submitted. ${res.accepted} ${res.accepted === 1 ? "fact" : "facts"} published${res.suggested_tasks ? `, ${res.suggested_tasks} ${res.suggested_tasks === 1 ? "request" : "requests"} suggested to the user` : ""}.`);
       nav.refreshCounts();
       nav.go("queue");
     } catch (err) {
@@ -407,11 +414,21 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
   };
 
   return (
-    <div className="flex h-[calc(100dvh-3.5rem)] flex-col">
+    <div className="flex min-h-[calc(100dvh-3.5rem)] flex-col lg:h-[calc(100dvh-3.5rem)]">
       {/* Header */}
       <div className="border-b border-line bg-white px-4 py-3">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <IconButton label="Back to queue" onClick={() => nav.go("queue")}>
+          <IconButton
+            label="Back to queue"
+            onClick={() => {
+              if (editId || summaryDraft !== null) {
+                toast("You have an edit open. Save it or cancel it before leaving.", { tone: "error" });
+                document.querySelector<HTMLElement>("[data-editing] textarea, [data-editing] input")?.focus();
+                return;
+              }
+              nav.go("queue");
+            }}
+          >
             <ArrowLeft className="h-4 w-4" />
           </IconButton>
           <div className="min-w-[60%] flex-1 sm:min-w-0">
@@ -469,7 +486,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                   <input type="checkbox" aria-label={c.label} className="mt-0.5 h-4 w-4 shrink-0 accent-[#177245]" checked={!!checks[c.key]} onChange={(e) => setCheck(c.key, e.target.checked)} />
                   <span>
                     <span className={cx("font-medium", checks[c.key] ? "text-ink" : "text-ink-2")}>{c.label}</span>
-                    <span className="block text-xs leading-snug text-ink-3">{c.help}</span>
+                    <span className="hidden text-xs leading-snug text-ink-3 md:block">{c.help}</span>
                   </span>
                 </label>
               ))}
@@ -479,7 +496,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
       </div>
 
       {/* Body */}
-      <div className="grid min-h-0 flex-1 grid-rows-[minmax(220px,2fr)_minmax(260px,3fr)] overflow-y-auto lg:grid-cols-2 lg:grid-rows-1 lg:overflow-visible">
+      <div className="grid flex-1 grid-rows-[55dvh_auto] lg:min-h-0 lg:grid-cols-2 lg:grid-rows-1">
         {/* Transcript */}
         <section aria-label="Transcript" className="flex min-h-0 flex-col border-b border-line bg-white lg:border-b-0 lg:border-r">
           <div className="space-y-2 border-b border-line px-4 py-2.5">
@@ -811,13 +828,14 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
           </div>
 
           {!readOnly ? (
-            <div className="flex flex-wrap items-center gap-3 border-t border-line bg-white px-4 py-3">
-              <div className="min-w-0 flex-1 text-[13px] text-ink-3">
-                {facts.length - pending} of {facts.length} decided<span className="hidden sm:inline">. Saved automatically.</span>
-              </div>
+            <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 border-t border-line bg-white px-4 py-3 lg:static">
+              {/* Escalate sits apart on the left, so the Submit label changing length never moves it under the cursor. */}
               <Button icon={<Flag className="h-4 w-4" />} onClick={() => setEscalate("")}>
                 Escalate
               </Button>
+              <div className="min-w-0 flex-1 text-right text-[13px] text-ink-3">
+                {facts.length - pending} of {facts.length} decided<span className="hidden sm:inline">. Saved automatically.</span>
+              </div>
               <Button
                 data-tour="submit"
                 variant="primary"

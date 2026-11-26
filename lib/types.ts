@@ -253,7 +253,7 @@ export interface QueueResult {
   events: QueueEvent[];
   processing: QueueEvent[];
   ticketsDue: Task[];
-  stats: { dueSoon: number; dueToday: number; verifiedThisWeek: number };
+  stats: { overdue?: number; dueSoon: number; dueToday: number; verifiedThisWeek: number };
   sources: Record<EventSource, { count_week: number; last_at: string | null }>;
   projects: Project[];
 }

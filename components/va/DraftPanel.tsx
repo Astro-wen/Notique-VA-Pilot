@@ -17,11 +17,44 @@ export function DraftPanel({ taskId, draft, open, onSaved, onChanged }: { taskId
   const [busy, setBusy] = useState<string | null>(null);
   const dirty = useRef(false);
   const [replace, setReplace] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "failed">("idle");
+  const pending = useRef<{ taskId: string; body: string } | null>(null);
+  const timer = useRef<number | null>(null);
   const stamp = draft?.status === "ready" ? draft.updated_at : null;
+
+  // Edits are kept on the server about a second after typing stops, and right away when leaving.
+  const flush = useRef(async () => {});
+  flush.current = async () => {
+    if (timer.current) window.clearTimeout(timer.current);
+    timer.current = null;
+    const job = pending.current;
+    if (!job) return;
+    pending.current = null;
+    setSaveState("saving");
+    try {
+      await rpc("saveDraftText", { task_id: job.taskId, body: job.body });
+      setSaveState("saved");
+    } catch {
+      setSaveState("failed");
+    }
+  };
+  useEffect(() => {
+    const warn = (e: BeforeUnloadEvent) => {
+      if (!pending.current) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => {
+      window.removeEventListener("beforeunload", warn);
+      void flush.current();
+    };
+  }, [taskId]);
 
   // Load a new draft into the editor, but never over text the VA is changing.
   useEffect(() => {
     dirty.current = false;
+    setSaveState("idle");
   }, [taskId]);
   useEffect(() => {
     if (!dirty.current && draft?.status === "ready") setText(draft.body ?? "");
@@ -82,7 +115,7 @@ export function DraftPanel({ taskId, draft, open, onSaved, onChanged }: { taskId
         <h3 className={`${label} flex items-center gap-1.5`}>
           <Sparkles className="h-3.5 w-3.5" /> AI first draft
         </h3>
-        {draft?.status === "ready" ? <span className="text-xs text-ink-3">Written {ago(draft.updated_at)} from the verified deal profile</span> : null}
+        {draft?.status === "ready" ? <span className="text-xs text-ink-3">Written {ago(draft.updated_at).toLowerCase()} from the verified deal profile</span> : null}
       </div>
 
       {!draft ? <p className="mt-2 text-[13px] text-ink-3">No draft yet. Ask for one below.</p> : null}
@@ -113,8 +146,16 @@ export function DraftPanel({ taskId, draft, open, onSaved, onChanged }: { taskId
             onChange={(e) => {
               dirty.current = true;
               setText(e.target.value);
+              pending.current = { taskId, body: e.target.value };
+              setSaveState("idle");
+              if (timer.current) window.clearTimeout(timer.current);
+              timer.current = window.setTimeout(() => void flush.current(), 1200);
             }}
+            onBlur={() => void flush.current()}
           />
+          <div className="mt-1 h-4 text-xs text-ink-3" aria-live="polite">
+            {saveState === "saving" ? "Saving your edits" : saveState === "saved" ? "Your edits are saved" : saveState === "failed" ? <span className="text-bad">Your edits could not be saved. Copy them somewhere safe and reload.</span> : null}
+          </div>
           <p className="mt-1.5 text-xs text-ink-3">Written by AI and not reviewed. The user cannot see it. Check every fact, finish it, then save it to Deliverables below.</p>
         </>
       ) : null}

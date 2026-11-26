@@ -138,7 +138,7 @@ export function Queue({ nav }: { nav: VaNav }) {
 
       <div className="mt-4 grid grid-cols-3 gap-3">
         {[
-          { label: "Due within 2 hours", value: data.stats.dueSoon, tone: data.stats.dueSoon ? "text-bad" : "" },
+          data.stats.overdue ? { label: "Overdue, do these first", value: data.stats.overdue, tone: "text-bad" } : { label: "Due within 2 hours", value: data.stats.dueSoon, tone: data.stats.dueSoon ? "text-bad" : "" },
           { label: "Due in the next 24 hours", value: data.stats.dueToday, tone: "" },
           { label: "Verified this week", value: data.stats.verifiedThisWeek, tone: "" },
         ].map((s) => (
