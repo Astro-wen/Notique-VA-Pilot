@@ -9,7 +9,7 @@ type HelpRole = "va" | "agent" | "admin";
 const STEPS: Record<HelpRole, { title: string; body: string }[]> = {
   agent: [
     { title: "Add a conversation", body: "After a meeting, tap Add conversation and add the recording, a transcript, screenshots of a text thread, or a typed note. Choose the client it belongs to." },
-    { title: "Your assistant checks it", body: "A person checks every fact against what was actually said. Results show under Deal status by 9:00 AM the next business day. Until then you see a notice that it is being checked." },
+    { title: "Your assistant verifies it", body: "A person checks every fact against what was actually said. Results show under Deal status by 9:00 AM the next business day. Until then you see a notice that it is being verified." },
     { title: "Read what changed", body: "Deal status lists decisions, budget, client needs, open questions, risks and next steps. Tap the source under any line to read the exact quote. Anything that needs you is at the top under Waiting on you." },
     { title: "Send the follow-up work", body: "The Requests tab suggests work after each conversation. Tap Send on the ones you want, edit them first, or write your own with Submit a request." },
     { title: "Review and send it yourself", body: "When something is delivered, open it, send it to your client yourself, and say whether you used it. Ask for changes sends it back. Your assistant never contacts your clients." },
@@ -42,7 +42,7 @@ const FAQ: Record<HelpRole, [string, string][]> = {
   ],
   agent: [
     ["What can I add?", "A meeting or call recording, a transcript file, screenshots of a text thread, or a note you type after a meeting. You can also store reference files such as a showing schedule. Those are kept for your assistant and not turned into facts."],
-    ["When will I see results?", "By 9:00 AM the next business day in your time zone. Deal status shows a notice while a conversation is being checked."],
+    ["When will I see results?", "By 9:00 AM the next business day in your time zone. Deal status shows a notice while a conversation is being verified."],
     ["What does Verified mean?", "Your assistant checked that line against the recording or text. Tap the source under it to read the exact quote."],
     ["Does my assistant contact my clients?", "Never. They only prepare research and drafts for you. Review every delivery before you send anything."],
     ["How do I change a request after sending it?", "You can edit it until work starts. After that, open the request and send a message."],

@@ -196,7 +196,7 @@ export function TicketRow({ task, active, onClick, tz, showProject }: { task: Ta
         <span className="block truncate text-sm font-medium">{task.title}</span>
         <span className="block truncate text-xs text-ink-3">
           {showProject ? `${task.project_name}, ` : ""}
-          {task.status === "delivered" ? `Delivered ${dateTime(task.delivered_at, tz)}` : task.eta ? `ETA ${dateTime(task.eta, tz)}` : task.status === "suggested" ? "Waiting for the user" : task.status === "cancelled" ? "Cancelled" : "ETA not set"}
+          {task.status === "delivered" ? `Delivered ${dateTime(task.delivered_at, tz)}` : task.eta ? `ETA ${dateTime(task.eta, tz)}` : task.status === "suggested" ? "Suggested, the user has not sent it yet" : task.status === "cancelled" ? "Cancelled" : "ETA not set"}
         </span>
       </span>
       {showProject ? <Badge tone={STATUS_TONE[task.status]}>{TASK_STATUS_LABEL[task.status]}</Badge> : null}

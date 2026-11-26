@@ -208,16 +208,66 @@ export function isTyping(target: EventTarget | null = typeof document === "undef
 
 /* Phone Back button guard. A dialog with typed text gets its own history entry, so Back asks before
    throwing the text away instead of leaving the page. Only the top dialog answers. */
-const backGuards: { id: number; onBack: () => void }[] = [];
+const backGuards: { id: number; onBack: () => void; hasText: () => boolean }[] = [];
+
+/** True while the dialog still holds words the user typed. Sent or cleared text does not count. */
+function hasTypedText(root: HTMLElement | null): boolean {
+  if (!root) return false;
+  return Array.from(root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("textarea, input")).some((el) => {
+    if (el instanceof HTMLInputElement && !["text", "search", "email", "url", "tel", "number", ""].includes(el.type)) return false;
+    return !el.disabled && !el.readOnly && el.value.trim() !== "";
+  });
+}
 let guardSeq = 0;
 function handlePopState() {
   const top = backGuards[backGuards.length - 1];
   if (top) top.onBack();
 }
 function handleBeforeUnload(e: BeforeUnloadEvent) {
-  if (backGuards.length === 0) return;
+  if (!backGuards.some((g) => g.hasText())) return;
   e.preventDefault();
   e.returnValue = "";
+}
+
+/**
+ * While `active`, the browser's Back (or a swipe) does not leave the page. It calls `onBlocked`
+ * instead, for screens with work in progress that is not a dialog, such as an open edit.
+ */
+export function useBackGuard(active: boolean, onBlocked: () => void) {
+  const blocked = useRef(onBlocked);
+  useEffect(() => {
+    blocked.current = onBlocked;
+  });
+  useEffect(() => {
+    if (!active || typeof window === "undefined") return;
+    const id = ++guardSeq;
+    window.history.pushState({ ...(window.history.state ?? {}), notiqueModal: id }, "", window.location.href);
+    if (backGuards.length === 0) {
+      window.addEventListener("popstate", handlePopState);
+      window.addEventListener("beforeunload", handleBeforeUnload);
+    }
+    backGuards.push({
+      id,
+      hasText: () => true,
+      onBack: () => {
+        window.history.pushState({ ...(window.history.state ?? {}), notiqueModal: id }, "", window.location.href);
+        blocked.current();
+      },
+    });
+    return () => {
+      const at = backGuards.findIndex((g) => g.id === id);
+      if (at >= 0) backGuards.splice(at, 1);
+      if (backGuards.length === 0) {
+        window.removeEventListener("popstate", handlePopState);
+        window.removeEventListener("beforeunload", handleBeforeUnload);
+      }
+      if (window.history.state?.notiqueModal === id) {
+        const rest = { ...window.history.state };
+        delete rest.notiqueModal;
+        window.history.replaceState(rest, "", window.location.href);
+      }
+    };
+  }, [active]);
 }
 
 export function Modal({ open, onClose, title, children, footer, wide }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode; footer?: React.ReactNode; wide?: boolean }) {
@@ -243,7 +293,13 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
     }
     backGuards.push({
       id,
+      hasText: () => hasTypedText(ref.current),
       onBack: () => {
+        // Nothing left to lose (the message was sent, or the fields were emptied): just close.
+        if (!hasTypedText(ref.current)) {
+          closeRef.current();
+          return;
+        }
         // Back already left the dialog's entry. Put it back and ask, so nothing typed is lost by accident.
         window.history.pushState({ ...(window.history.state ?? {}), notiqueModal: id }, "", window.location.href);
         setAskDiscard(true);
@@ -295,7 +351,7 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
   }, [open]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" data-modal onMouseDown={(e) => e.target === e.currentTarget && !dirty.current && onClose()}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" data-modal onMouseDown={(e) => e.target === e.currentTarget && (!dirty.current || !hasTypedText(ref.current)) && onClose()}>
       <div ref={ref} tabIndex={-1} onInput={markDirty} role="dialog" aria-modal="true" aria-labelledby={titleId} className={cx("rise flex max-h-[92vh] w-full flex-col rounded-t-2xl bg-white shadow-xl outline-none sm:rounded-xl", wide ? "sm:max-w-2xl" : "sm:max-w-md")}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
           <h2 id={titleId} className="text-base font-semibold">

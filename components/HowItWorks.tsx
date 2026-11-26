@@ -80,7 +80,7 @@ const STAGES: StageInfo[] = [
     user: "Adds a recording, a transcript, screenshots of a text thread, or a typed note, and picks the client.",
     ai: "Transcribes audio with speakers and timestamps, then drafts facts in six sections. Every draft points at the exact lines it came from.",
     va: "Nothing yet. The VA can also add material the user sent by text or email.",
-    meet: "No hand-off. The user sees a notice that the conversation is being checked.",
+    meet: "No hand-off. The user sees a notice that the conversation is being verified.",
     clicks: [{ who: "User", steps: "Tap Add conversation, choose what you are adding, pick the client, attach the file or paste the text, then tap Send." }],
     userHref: "/agent",
     vaHref: "/va?view=sources",

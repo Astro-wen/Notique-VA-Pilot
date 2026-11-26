@@ -336,7 +336,7 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
           ) : null}
           {active.length ? (
             <section>
-              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-3">In progress ({active.length})</h2>
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-3">Sent to {vaName} ({active.length})</h2>
               <div className="space-y-2">
                 {active.map((t) => (
                   <TaskRow key={t.id} task={t} tz={tz} onOpen={() => setTaskId(t.id)} />

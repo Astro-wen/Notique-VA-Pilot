@@ -43,7 +43,7 @@ export function TasksView({ nav }: { nav: VaNav }) {
             <Empty icon={<ClipboardList className="h-5 w-5" />} title={filter === "open" ? "No open tickets" : "Nothing here"} body={filter === "open" ? "When the user sends a request it appears here as a ticket." : undefined} />
           </Card>
         ) : (
-          rows.map((t) => <TicketRow key={t.id} task={t} tz={nav.agent.timezone} showProject onClick={() => nav.go("project", { id: t.project_id, tab: "tickets", task: t.id })} />)
+          rows.map((t) => <TicketRow key={t.id} task={t} tz={nav.agent.timezone} showProject onClick={() => nav.go("project", { id: t.project_id, tab: "tickets", from: "tasks", task: t.id })} />)
         )}
       </div>
     </div>

@@ -159,7 +159,7 @@ export function Checkin({ nav }: { nav: VaNav }) {
                         </Button>
                       </>
                     ) : item.task_id ? (
-                      <Button size="sm" onClick={() => nav.go("project", { id: item.project_id, tab: "tickets", task: item.task_id ?? undefined })}>
+                      <Button size="sm" onClick={() => nav.go("project", { id: item.project_id, tab: "tickets", from: "checkin", task: item.task_id ?? undefined })}>
                         Open ticket
                       </Button>
                     ) : (

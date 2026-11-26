@@ -50,6 +50,11 @@ export function AddEventDialog({ open, onClose, projects, agentId, defaultProjec
   const [text, setText] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
+  // Bring a new error into view once, so on a phone the button never looks like it did nothing.
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [error]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -122,7 +127,15 @@ export function AddEventDialog({ open, onClose, projects, agentId, defaultProjec
     if (!when || Number.isNaN(new Date(when).getTime())) return setError("Enter when the conversation happened.");
     if (new Date(when).getTime() > Date.now() + 5 * 60000) return setError("The conversation time cannot be in the future.");
     if (kind === "audio" && files.length === 0) return setError("Choose a recording to upload.");
-    if (kind !== "audio" && files.length === 0 && !(text.trim().length >= 20 || (/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/.test(text) && text.trim().length >= 6))) return setError(kind === "texts" ? "Add screenshots or paste the thread." : "Add a file or paste the text.");
+    if (kind !== "audio" && files.length === 0 && !(text.trim().length >= 20 || (/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/.test(text) && text.trim().length >= 6))) return setError(
+        text.trim()
+          ? "This is too short to verify. Write a few sentences about what was said (at least 20 characters)."
+          : kind === "texts"
+            ? "Add screenshots or paste the thread."
+            : kind === "note"
+              ? "Write the note first."
+              : "Add a file or paste the text.",
+      );
     try {
       let pid = projectId;
       if (pid === "new") {
@@ -278,7 +291,11 @@ export function AddEventDialog({ open, onClose, projects, agentId, defaultProjec
           </Field>
         ) : null}
 
-        {error ? <ErrorNote message={error} /> : null}
+        {error ? (
+          <div ref={errorRef}>
+            <ErrorNote message={error} />
+          </div>
+        ) : null}
       </div>
     </Modal>
   );

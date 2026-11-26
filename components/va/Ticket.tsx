@@ -348,7 +348,7 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
       >
         <p className="text-sm text-ink-2">
           {confirm === "deliver"
-            ? `${nav.agent.name} will see ${deliverables.length} ${deliverables.length === 1 ? "file" : "files"} and the timer stops at ${clock(logged)}. ${nav.agent.name.split(" ")[0]} sends this to the client. Make sure it does not read as if it was already sent.`
+            ? `${nav.agent.name} will see ${deliverables.length} ${deliverables.length === 1 ? "deliverable" : "deliverables"} and the timer stops at ${clock(logged)}. ${nav.agent.name.split(" ")[0]} sends this to the client. Make sure it does not read as if it was already sent.`
             : "The user sees it as cancelled. Use this only if the user no longer needs it."}
         </p>
       </Modal>

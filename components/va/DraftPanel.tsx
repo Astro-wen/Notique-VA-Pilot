@@ -57,7 +57,11 @@ export function DraftPanel({ taskId, draft, open, onSaved, onChanged }: { taskId
     setSaveState("idle");
   }, [taskId]);
   useEffect(() => {
-    if (!dirty.current && draft?.status === "ready") setText(draft.body ?? "");
+    if (!dirty.current && draft?.status === "ready") {
+      setText(draft.body ?? "");
+      // Edits saved earlier, even in another visit, count as the VA's work: writing again must ask first.
+      if (draft.edited_at) dirty.current = true;
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId, stamp]);
 

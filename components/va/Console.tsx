@@ -44,6 +44,8 @@ export function Console() {
   const params = useSearchParams();
   const agents = useMemo(() => me?.agents ?? [], [me]);
   const view = (params.get("view") as VaView) || "queue";
+  // A ticket opened from Tickets or Check-in keeps that section highlighted in the sidebar.
+  const from = view === "project" && ["tasks", "checkin"].includes(params.get("from") ?? "") ? (params.get("from") as VaView) : null;
   const [agentId, setAgentId] = useState<string | null>(null);
   const [counts, setCounts] = useState<{ queue: number; tasks: number; checkin?: number } | null>(null);
 
@@ -130,7 +132,7 @@ export function Console() {
         {!focus ? (
           <nav aria-label="Sections" className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-52 shrink-0 flex-col gap-1 border-r border-line bg-white p-3 md:flex">
             {NAV.map((n) => {
-              const active = n.key === view || n.also?.includes(view);
+              const active = from ? n.key === from : n.key === view || n.also?.includes(view);
               const count = n.key === "queue" ? counts?.queue : n.key === "tasks" ? counts?.tasks : n.key === "checkin" ? counts?.checkin : undefined;
               return (
                 <button key={n.key} data-tour={`nav-${n.key}`} onClick={() => go(n.key)} aria-current={active ? "page" : undefined} className={cx("flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm", active ? "bg-accent-soft font-semibold text-[#2f55cc]" : "text-ink-2 hover:bg-page")}>
@@ -197,7 +199,7 @@ export function Console() {
       {!focus ? (
         <nav aria-label="Sections" className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-white md:hidden">
           {NAV.filter((n) => n.key !== "how").map((n) => {
-            const active = n.key === view || n.also?.includes(view);
+            const active = from ? n.key === from : n.key === view || n.also?.includes(view);
             return (
               <button key={n.key} data-tour={`nav-${n.key}`} onClick={() => go(n.key)} className={cx("flex h-14 flex-1 flex-col items-center justify-center gap-0.5 text-[11px]", active ? "font-semibold text-accent" : "text-ink-3")}>
                 {n.icon}

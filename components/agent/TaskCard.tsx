@@ -221,7 +221,7 @@ export function TaskCard({ taskId, vaName, tz, preview, startEditing, onClose, o
 
           {deliverables.length ? (
             <div>
-              <h4 className={label}>Delivered by {vaName}</h4>
+              <h4 className={label}>{task.status === "delivered" ? `Delivered by ${vaName}` : `Delivered earlier by ${vaName}`}</h4>
               <div className="mt-2 space-y-2">
                 {deliverables.map((f) => (
                   <div key={f.id} className="space-y-1.5">

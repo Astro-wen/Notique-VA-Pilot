@@ -2,16 +2,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, CircleHelp, Flag, Pencil, Plus, Quote, RotateCcw, Search, Timer, Trash2, X } from "lucide-react";
 import { rpc } from "@/lib/client/api";
+import { FAIR_HOUSING_HELP, PROTECTED } from "@/lib/fairHousing";
 import { SOURCE_LABEL, clock, dateTime, plainDate, remaining } from "@/lib/client/format";
 import { SECTIONS, TASK_CATEGORIES, type EventChecks, type EventDetail, type Fact, type Section, type SuggestedTask, type Verdict } from "@/lib/types";
-import { Badge, Button, ErrorNote, Field, IconButton, Input, Kbd, Modal, Select, Spinner, Textarea, composing, cx, isTyping, useToast } from "../ui";
+import { Badge, Button, ErrorNote, Field, IconButton, Input, Kbd, Modal, Select, Spinner, Textarea, composing, cx, isTyping, useBackGuard, useToast } from "../ui";
 import type { VaNav } from "./Console";
 import { Coach, TOURS } from "../Coach";
 
 const CHECKS: { key: keyof EventChecks; label: string; help: string }[] = [
   { key: "consent", label: "Consent heard", help: "Everyone was told they are being recorded. Notes and texts need no consent." },
   { key: "pii", label: "Personal data masked", help: "No SSN, bank or card numbers in anything you approved." },
-  { key: "fair_housing", label: "Fair housing safe", help: "Nothing you approved mentions race, religion, family, age or disability." },
+  { key: "fair_housing", label: "Fair housing safe", help: "Nothing you approved, summary included, mentions race, religion, family, age, disability or military service." },
   { key: "type_match", label: "Matches the project", help: "This conversation is about this client." },
 ];
 
@@ -26,7 +27,6 @@ function confidenceLabel(c: number | null): { text: string; tone: "ok" | "warn" 
   return { text: `Low confidence ${pct}%`, tone: "bad" };
 }
 
-const PROTECTED = /\b(wife|husband|spouse|married|single (mom|mother|dad|father|parent)|divorc\w*|pregnan\w*|kids?|child(ren)?|son|daughter|baby|famil(y|ies)|veteran|military|disab\w*|wheelchair|religio\w*|church|mosque|temple|synagogue|christian|muslim|jewish|hindu|race|ethnic\w*|nationality|immigra\w*|elderly|retire[de]?|gay|lesbian|transgender)\b/i;
 
 
 interface Draft {
@@ -70,6 +70,8 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
   const [elapsed, setElapsed] = useState(0);
   const unsent = useRef(0);
   const checksRef = useRef<EventChecks | null>(null);
+  // The browser's own Back or a trackpad swipe must not drop an open edit either.
+  useBackGuard(!!editId || summaryDraft !== null || !!adding, () => toast("You have an edit open. Save it or cancel it before leaving.", { tone: "error" }));
   const checkQueue = useRef<Promise<unknown>>(Promise.resolve());
   const saving = useRef<Record<string, Promise<boolean>>>({});
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -95,6 +97,20 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
     setElapsed(0);
     unsent.current = 0;
     load();
+  }, [load]);
+
+  // Coming back to this tab shows what changed elsewhere (another window, a submit), unless an edit is open.
+  const quiet = !editId && summaryDraft === null && !adding;
+  const quietRef = useRef(quiet);
+  useEffect(() => {
+    quietRef.current = quiet;
+  });
+  useEffect(() => {
+    const onShow = () => {
+      if (document.visibilityState === "visible" && quietRef.current) load();
+    };
+    document.addEventListener("visibilitychange", onShow);
+    return () => document.removeEventListener("visibilitychange", onShow);
   }, [load]);
 
   const loadedId = detail?.event.id;
@@ -159,6 +175,10 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
 
   async function decide(fact: Fact, verdict: Verdict, extra: Record<string, unknown> = {}): Promise<boolean> {
     if (readOnly) return false;
+    if ((verdict === "approved" || verdict === "edited") && PROTECTED.test(typeof extra.statement === "string" ? extra.statement : fact.statement)) {
+      toast(FAIR_HOUSING_HELP, { tone: "error" });
+      return false;
+    }
     if (verdict === "approved" && fact.origin === "ai" && fact.confidence !== null && fact.confidence < 0.6) {
       toast("The AI is not sure about this one. Press E to check the quote and fix the wording, D to decline, or I to ask the user.", { tone: "error" });
       return false;
@@ -169,13 +189,15 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
     const prior = saving.current[fact.id] ?? Promise.resolve();
     const mine = prior.then(async () => {
       try {
-        const saved = await rpc<Fact>("setVerdict", { fact_id: fact.id, verdict, ...extra });
+        const saved = await rpc<Fact>("setVerdict", { fact_id: fact.id, verdict, from: before.verdict, ...extra });
         patchFact(saved);
         if (verdict !== "pending") focusNextPending(fact.id);
         return true;
       } catch (err) {
         patchFact(before);
         toast((err as Error).message, { tone: "error" });
+        // Another window got there first, or the conversation was submitted: show what is true now.
+        if ((err as { status?: number }).status === 409 || /already submitted/.test((err as Error).message)) load();
         return false;
       }
     });
@@ -195,6 +217,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
     if (!draft.statement.trim()) return toast("The statement cannot be empty.", { tone: "error" });
     const canTask = draft.section === "questions" || draft.section === "next_steps";
     if (canTask && draft.withTask && !draft.task.title.trim()) return toast("Give the suggested request a title, or untick it.", { tone: "error" });
+    if (PROTECTED.test(draft.statement)) return toast(FAIR_HOUSING_HELP, { tone: "error" });
     const unchanged = draft.statement.trim() === (fact.ai_statement ?? fact.statement).trim();
     const kept = draft;
     setEditId(null);
@@ -597,7 +620,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                         </option>
                       ))}
                     </Select>
-                    <Input autoFocus aria-label="Fact" placeholder="State the fact in one sentence" value={adding.statement} onChange={(e) => setAdding({ ...adding, statement: e.target.value })} onKeyDown={(e) => e.key === "Enter" && !composing(e) && addFact()} />
+                    <Input autoFocus maxLength={400} aria-label="Fact" placeholder="State the fact in one sentence" value={adding.statement} onChange={(e) => setAdding({ ...adding, statement: e.target.value })} onKeyDown={(e) => e.key === "Enter" && !composing(e) && addFact()} />
                   </div>
                   <div className="flex justify-end gap-2">
                     <Button size="sm" onClick={() => setAdding(null)}>
@@ -709,7 +732,8 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                                   ))}
                                 </Select>
                               </Field>
-                              <Textarea autoFocus rows={2} aria-label="Statement" value={draft.statement} onChange={(e) => setDraft({ ...draft, statement: e.target.value })} onKeyDown={(e) => e.key === "Enter" && !composing(e) && (e.metaKey || e.ctrlKey) && saveEdit(f)} />
+                              <Textarea autoFocus rows={2} maxLength={400} aria-label="Statement" value={draft.statement} onChange={(e) => setDraft({ ...draft, statement: e.target.value })} onKeyDown={(e) => e.key === "Enter" && !composing(e) && (e.metaKey || e.ctrlKey) && saveEdit(f)} />
+                              {draft.statement.length > 340 ? <p className="text-xs text-ink-3">{400 - draft.statement.length} characters left. Keep it to one sentence.</p> : null}
                               <div className="grid gap-3 sm:grid-cols-2">
                                 <Field label="Follow up on" hint="Optional date">
                                   <Input type="date" value={draft.follow_up_date} onChange={(e) => setDraft({ ...draft, follow_up_date: e.target.value })} />
@@ -793,7 +817,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                                   </div>
                                 ) : (
                                   <div className="mt-3 flex flex-wrap gap-2">
-                                    {f.origin === "ai" && f.confidence !== null && f.confidence < 0.6 ? (
+                                    {(f.origin === "ai" && f.confidence !== null && f.confidence < 0.6) || PROTECTED.test(f.statement) ? (
                                       <Button size="sm" variant="primary" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => startEdit(f)} title="The AI is not sure about this one. Read the quote, fix the wording, then save to approve it.">
                                         Edit and approve {focused ? <Kbd>E</Kbd> : null}
                                       </Button>
@@ -845,6 +869,10 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                 onClick={() => {
                   if (editId || summaryDraft !== null || adding) {
                     toast("You have an edit open. Save or cancel it before you submit.", { tone: "error" });
+                    return;
+                  }
+                  if (event.summary && PROTECTED.test(event.summary)) {
+                    toast("Reword the summary first. It may mention a protected characteristic.", { tone: "error" });
                     return;
                   }
                   if (!checksDone) {

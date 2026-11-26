@@ -314,6 +314,9 @@ Rules:
 9. Record only what an agent would need to move this deal forward. Skip small talk, compliments, and general impressions. Do not record the same point twice in different sections; pick the best section. Most conversations yield 3 to 8 facts.
 6. Include suggested_task only for questions and next_steps where a remote assistant could do the work from documents and online research, such as finding listings, building a comparison, preparing a brief, or drafting a follow-up for the agent to send. The assistant never phones or messages the client or third parties. Omit suggested_task otherwise. The agent reads suggested_task and sends it to the assistant with one tap, so write title and description in the agent's own voice as an instruction to the assistant ("Draft a follow-up email to Michael about...", "Find out whether..."), never "the agent" in the third person, and do not repeat a date that will already have passed.
 7. Omit optional fields that do not apply. Do not add commentary outside the JSON.
+11. The agent reads every fact. Refer to the agent by the first name given above, never as "the agent", for example "Sarah will send three comparable sales this week".
+12. When this conversation settles, answers, or replaces an earlier verified fact (an open question that now has an answer, an offer amount or plan that changed, a decision that was reversed), set supersedes_id on the new fact to that earlier fact's id, so the old line is retired and the agent never sees two versions side by side.
+13. Do not put a suggested_task on a fact when the same work is already in the list of requested or suggested work above.
 8. If the event contains nothing relevant, return an empty facts array.`;
 
 export async function extractFacts(input: {
@@ -323,6 +326,10 @@ export async function extractFacts(input: {
   occurredAt: string;
   project: { client_name: string; deal_type: string; area: string | null; budget: string | null };
   priorFacts: { id: string; section: string; statement: string }[];
+  /** First name of the agent who owns the project, so facts never say "the agent". */
+  agentName?: string | null;
+  /** Work already requested or suggested, so it is not suggested again. */
+  openRequests?: string[];
   /** Force one model with no fallback. Used to compare models. */
   model?: string;
 }): Promise<Extraction> {
@@ -335,13 +342,17 @@ export async function extractFacts(input: {
   const prior = input.priorFacts.length
     ? input.priorFacts.map((f) => `${f.id} | ${f.section} | ${f.statement}`).join("\n")
     : "None yet.";
-  const user = `Client: ${input.project.client_name} (${input.project.deal_type})
+  const user = `Agent: ${input.agentName ?? "not known"}
+Client: ${input.project.client_name} (${input.project.deal_type})
 Area: ${input.project.area ?? "not set"}
 Budget on file: ${input.project.budget ?? "not set"}
 Event: ${input.eventTitle} (${input.eventType}), ${input.occurredAt.slice(0, 10)}
 
 Earlier verified facts for this client (id | section | statement):
 ${prior}
+
+Work already requested from the assistant or already suggested (do not suggest these again):
+${input.openRequests?.length ? input.openRequests.map((t) => `- ${t}`).join("\n") : "None."}
 
 Transcript, one numbered line per turn:
 ${transcript}`;

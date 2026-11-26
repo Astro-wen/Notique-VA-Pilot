@@ -81,10 +81,12 @@ export function AddFile({ projectId, taskId, kind, onAdded, allowLink, label }: 
 
   async function addLink() {
     const clean = url.trim();
-    if (!/^https?:\/\//i.test(clean)) return toast("Links must start with http or https.", { tone: "error" });
+    // People paste "docs.google.com/..." without the scheme. Add it rather than refuse.
+    const withScheme = /^https?:\/\//i.test(clean) ? clean : /^[\w-]+(\.[\w-]+)+(\/|$)/.test(clean) ? `https://${clean}` : null;
+    if (!withScheme) return toast("That does not look like a link. Paste the full address, for example docs.google.com/...", { tone: "error" });
     setBusy(true);
     try {
-      await rpc("addFile", { project_id: projectId, task_id: taskId, kind, name: name.trim() || clean.replace(/^https?:\/\//, "").slice(0, 60), url: clean });
+      await rpc("addFile", { project_id: projectId, task_id: taskId, kind, name: name.trim() || withScheme.replace(/^https?:\/\//, "").slice(0, 60), url: withScheme });
       setUrl("");
       setName("");
       setLinkOpen(false);
@@ -134,6 +136,7 @@ export function TextPreview({ file }: { file: FileRow }) {
   const toast = useToast();
   const [text, setText] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let live = true;
     rpc<{ url: string }>("fileUrl", { file_id: file.id })
@@ -150,14 +153,40 @@ export function TextPreview({ file }: { file: FileRow }) {
     try {
       await navigator.clipboard.writeText(text);
       toast("Copied. Paste it into your email or message.");
+      return;
     } catch {
-      toast("Could not copy. Press and hold the text to select it.", { tone: "error" });
+      /* Some browsers only allow the older copy command. */
     }
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    let ok = false;
+    try {
+      ok = document.execCommand("copy");
+    } catch {
+      ok = false;
+    }
+    area.remove();
+    if (ok) return toast("Copied. Paste it into your email or message.");
+    // Last resort: select the text on screen so the phone's own Copy menu works.
+    const node = box.current;
+    if (node) {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    }
+    toast("The text is selected. Use Copy from your phone's menu.");
   }
   if (failed) return null;
   return (
     <div className="rounded-lg border border-line bg-white">
-      <div className="max-h-72 overflow-y-auto whitespace-pre-wrap px-3 py-2.5 text-[13px] leading-relaxed text-ink">{text ?? "Loading the text..."}</div>
+      <div ref={box} className="max-h-72 select-text overflow-y-auto whitespace-pre-wrap px-3 py-2.5 text-[13px] leading-relaxed text-ink">{text ?? "Loading the text..."}</div>
       <div className="flex justify-end border-t border-line px-2 py-1.5">
         <Button size="sm" icon={<Copy className="h-3.5 w-3.5" />} disabled={text === null} onClick={copy}>
           Copy text

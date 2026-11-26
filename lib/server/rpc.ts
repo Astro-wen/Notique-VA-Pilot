@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { FAIR_HOUSING_HELP, PROTECTED } from "../fairHousing";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { after } from "next/server";
 import { BUCKET, db } from "./supabase";
@@ -267,6 +268,8 @@ async function runExtraction(eventId: string) {
     ) as any[];
   }
 
+  const agentRow = q(await db().from("profiles").select("name").eq("id", project.agent_id).maybeSingle()) as { name: string } | null;
+  const openWork = q(await db().from("tasks").select("title").eq("project_id", project.id).in("status", ["suggested", "received", "in_progress", "waiting"]).limit(30)) as { title: string }[];
   const result = await extractFacts({
     lines: lines.map((l) => ({ start_ms: l.start_ms, speaker: l.speaker, text: l.text })),
     eventTitle: event.title,
@@ -274,6 +277,8 @@ async function runExtraction(eventId: string) {
     occurredAt: event.occurred_at,
     project,
     priorFacts: prior,
+    agentName: agentRow?.name?.split(" ")[0] ?? null,
+    openRequests: openWork.map((t) => t.title),
   });
 
   // Another run may have finished while the model was working. Never overwrite facts a VA is already deciding on.
@@ -813,7 +818,7 @@ async function writeDraft(task: Task, instructions: string | null): Promise<void
       instructions,
     });
     // Only the run that started last may write, so a slow older run cannot replace a newer draft.
-    await db().from("task_drafts").update({ status: "ready", body: out.body, gaps: out.gaps, sources: out.sources, model: out.model, error: null, updated_at: new Date().toISOString() }).eq("task_id", task.id).eq("updated_at", started);
+    await db().from("task_drafts").update({ status: "ready", body: out.body, gaps: out.gaps, sources: out.sources, model: out.model, error: null, edited_at: null, updated_at: new Date().toISOString() }).eq("task_id", task.id).eq("updated_at", started);
   } catch (err) {
     await db().from("task_drafts").update({ status: "failed", error: ((err as Error).message || "The draft could not be written.").slice(0, 300), updated_at: new Date().toISOString() }).eq("task_id", task.id).eq("updated_at", started);
   }
@@ -1567,7 +1572,7 @@ export const handlers: Record<string, Handler> = {
     const patch: Record<string, unknown> = {};
     const locked = event.status === "submitted";
     if (locked && (args.checks || args.speaker_map || typeof args.title === "string" || typeof args.summary === "string")) {
-      throw new RpcError("This event is already submitted. Reopen it to make changes.");
+      throw new RpcError("This conversation was already submitted, so the screen now shows it as read only. Reopen it to make changes.");
     }
     if (args.checks && typeof args.checks === "object") {
       const next = { ...(event.checks ?? {}) } as Record<string, boolean>;
@@ -1600,7 +1605,7 @@ export const handlers: Record<string, Handler> = {
     const fact = q(await db().from("facts").select("*").eq("id", str(args.fact_id, "Fact")).maybeSingle()) as any;
     if (!fact) throw new RpcError("This item no longer exists.", 404);
     const event = await loadEvent(p, fact.event_id);
-    if (event.status === "submitted") throw new RpcError("This event is already submitted. Reopen it to make changes.");
+    if (event.status === "submitted") throw new RpcError("This conversation was already submitted, so the screen now shows it as read only. Reopen it to make changes.");
     const verdict = str(args.verdict, "Verdict", 20) as Verdict;
     if (!["pending", "approved", "edited", "declined", "insufficient"].includes(verdict)) throw new RpcError("Unknown verdict.");
     const patch: Record<string, unknown> = { verdict };
@@ -1620,6 +1625,9 @@ export const handlers: Record<string, Handler> = {
     }
     if (verdict === "approved" && fact.origin === "ai" && fact.ai_statement) {
       patch.statement = fact.ai_statement;
+    }
+    if ((verdict === "approved" || verdict === "edited") && PROTECTED.test(String(patch.statement ?? fact.statement))) {
+      throw new RpcError(FAIR_HOUSING_HELP);
     }
     if (verdict === "pending") {
       patch.statement = fact.origin === "ai" && fact.ai_statement ? fact.ai_statement : fact.statement;
@@ -1643,14 +1651,21 @@ export const handlers: Record<string, Handler> = {
             }
           : null;
     }
-    const row = q(await db().from("facts").update(patch).eq("id", fact.id).select("*").single()) as any;
+    // The screen says which decision it saw. If another window changed it since, refuse instead of overwriting.
+    const expected = typeof args.from === "string" ? args.from : null;
+    if (expected && fact.verdict !== expected) throw new RpcError("This item was just changed in another window. The screen now shows the latest.", 409);
+    let write = db().from("facts").update(patch).eq("id", fact.id);
+    if (expected) write = write.eq("verdict", expected);
+    const rows = q(await write.select("*")) as any[];
+    if (rows.length === 0) throw new RpcError("This item was just changed in another window. The screen now shows the latest.", 409);
+    const row = rows[0];
     return { ...row, confidence: row.confidence === null ? null : Number(row.confidence) };
   },
 
   async addFact(ctx, args): Promise<Fact> {
     const p = staff(ctx);
     const event = await loadEvent(p, args.event_id);
-    if (event.status === "submitted") throw new RpcError("This event is already submitted. Reopen it to make changes.");
+    if (event.status === "submitted") throw new RpcError("This conversation was already submitted, so the screen now shows it as read only. Reopen it to make changes.");
     const section = str(args.section, "Section", 20) as Section;
     if (!["decisions", "budget", "needs", "questions", "risks", "next_steps"].includes(section)) throw new RpcError("Choose a section.");
     const lineIds: string[] = Array.isArray(args.line_ids) ? args.line_ids.slice(0, 4) : [];
@@ -1684,7 +1699,7 @@ export const handlers: Record<string, Handler> = {
     const fact = q(await db().from("facts").select("*").eq("id", str(args.fact_id, "Fact")).maybeSingle()) as any;
     if (!fact) return { ok: true };
     const event = await loadEvent(p, fact.event_id);
-    if (event.status === "submitted") throw new RpcError("This event is already submitted.");
+    if (event.status === "submitted") throw new RpcError("This conversation was already submitted.", 409);
     if (fact.origin !== "va") throw new RpcError("AI drafts cannot be deleted. Decline it instead.");
     q(await db().from("facts").delete().eq("id", fact.id).select("id"));
     return { ok: true };
@@ -1693,14 +1708,15 @@ export const handlers: Record<string, Handler> = {
   async submitEvent(ctx, args) {
     const p = staff(ctx);
     const event = await loadEvent(p, args.event_id);
-    if (event.status === "submitted") throw new RpcError("This event is already submitted.");
-    if (!["ready", "in_review"].includes(event.status)) throw new RpcError("This event is not ready to submit.");
+    if (event.status === "submitted") throw new RpcError("This conversation was already submitted.", 409);
+    if (!["ready", "in_review"].includes(event.status)) throw new RpcError("This conversation is not ready to submit yet.");
     // The screen sends the checks it shows, so a tick still on its way cannot block or change the submit.
     const checks = { ...(event.checks ?? {}) } as Record<string, boolean>;
     if (args.checks && typeof args.checks === "object") {
       for (const key of ["consent", "pii", "fair_housing", "type_match"]) if (typeof args.checks[key] === "boolean") checks[key] = args.checks[key];
     }
     const missing = (["consent", "pii", "fair_housing", "type_match"] as const).filter((k) => !checks[k]);
+    if (event.summary && PROTECTED.test(event.summary)) throw new RpcError("Reword the summary first. It may mention a protected characteristic such as family, age, religion, disability or military service.");
     if (missing.length) throw new RpcError("Confirm all four checks at the top of the page before submitting.");
     const precheck = q(await db().from("facts").select("verdict").eq("event_id", event.id)) as any[];
     const waiting = precheck.filter((f) => f.verdict === "pending").length;
@@ -1716,7 +1732,7 @@ export const handlers: Record<string, Handler> = {
         .in("status", ["ready", "in_review"])
         .select("id"),
     ) as any[];
-    if (claimed.length === 0) throw new RpcError("This event is already submitted.");
+    if (claimed.length === 0) throw new RpcError("This conversation was already submitted.", 409);
 
     const resolved: string[] = [];
     const dismissed: string[] = [];
@@ -1937,7 +1953,7 @@ export const handlers: Record<string, Handler> = {
     if (["delivered", "cancelled", "dismissed"].includes(task.status)) throw new RpcError(`This request was already ${task.status}.`, 409);
     const done = q(await db().from("tasks").update({ status: "cancelled", ...pauseTimerPatch(task) }).eq("id", task.id).eq("status", task.status).select("id")) as any[];
     if (done.length === 0) throw new RpcError("This request just changed. Reload it and try again.", 409);
-    await systemMessage(task.id, `${p.role === "agent" ? "The user" : p.name} cancelled this task.`);
+    await systemMessage(task.id, `${p.name.split(" ")[0]} cancelled this request.`);
     await audit(p, "task.cancel", "task", task.id);
     return { ok: true };
   },
@@ -2037,7 +2053,7 @@ export const handlers: Record<string, Handler> = {
     if (rows.length === 0) throw new RpcError("This request just changed. Reload it and try again.", 409);
     const row = rows[0];
     if (feedback === "revision_requested") {
-      await systemMessage(task.id, "The user asked for a revision.");
+      await systemMessage(task.id, `${p.name.split(" ")[0]} asked for changes.`);
       const note = optStr(args.note, 2000);
       if (note) {
         await db().from("task_messages").insert({ task_id: task.id, sender_id: p.role === "agent" ? p.id : null, sender_role: "agent", channel: p.role === "agent" ? "in_app" : "text", body: note });
@@ -2111,7 +2127,7 @@ export const handlers: Record<string, Handler> = {
     const p = staff(ctx);
     const task = await loadTask(p, args.task_id);
     if (typeof args.body !== "string") throw new RpcError("Nothing to save.");
-    const rows = q(await db().from("task_drafts").update({ body: args.body.slice(0, 20000) }).eq("task_id", task.id).eq("status", "ready").select("task_id")) as any[];
+    const rows = q(await db().from("task_drafts").update({ body: args.body.slice(0, 20000), edited_at: new Date().toISOString() }).eq("task_id", task.id).eq("status", "ready").select("task_id")) as any[];
     if (rows.length === 0) throw new RpcError("The draft is being rewritten right now, so this edit was not saved.", 409);
     return { ok: true };
   },

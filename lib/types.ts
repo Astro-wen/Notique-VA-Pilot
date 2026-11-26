@@ -361,6 +361,8 @@ export interface TaskDraft {
   model: string | null;
   error: string | null;
   updated_at: string;
+  /** Set once the VA has changed the text. */
+  edited_at?: string | null;
 }
 
 export type ReachChannel = "off" | "email" | "sms" | "both";
