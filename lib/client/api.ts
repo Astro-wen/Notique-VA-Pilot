@@ -39,15 +39,31 @@ export async function rpc<T = unknown>(fn: string, args: Record<string, unknown>
   return body.data as T;
 }
 
-export const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
+/** Storage rejects bigger files. The Supabase Free plan is fixed at 50 MB; raise NEXT_PUBLIC_MAX_UPLOAD_MB after upgrading. */
+export const MAX_UPLOAD_MB = Number(process.env.NEXT_PUBLIC_MAX_UPLOAD_MB) || 50;
+export const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
+
+/** Why a file cannot be uploaded, in words a user can act on, or null when it is fine. */
+export function uploadProblem(file: File): string | null {
+  if (file.size === 0) return `"${file.name}" is empty.`;
+  if (file.size <= MAX_UPLOAD_BYTES) return null;
+  const mb = Math.round(file.size / 1024 / 1024);
+  const audio = /^audio\/|^video\//.test(file.type) || /\.(wav|m4a|mp3|mp4|aac|caf|aiff?)$/i.test(file.name);
+  return audio
+    ? `"${file.name}" is ${mb} MB and the limit is ${MAX_UPLOAD_MB} MB. Save or export it as M4A or MP3 instead of WAV (an hour of M4A is about 30 MB), or split a long recording into two parts.`
+    : `"${file.name}" is ${mb} MB and the limit is ${MAX_UPLOAD_MB} MB.`;
+}
 
 /** Uploads straight to storage with a signed URL, so large recordings never pass through the app server. */
 export async function uploadFile(projectId: string, file: File): Promise<{ path: string; name: string; size: number; mime: string }> {
-  if (file.size > MAX_UPLOAD_BYTES) throw new ApiError("This file is larger than 500 MB. Trim or compress it and try again.", 413);
-  if (file.size === 0) throw new ApiError("This file is empty.", 400);
+  const problem = uploadProblem(file);
+  if (problem) throw new ApiError(problem, file.size === 0 ? 400 : 413);
   const { path, token } = await rpc<{ path: string; token: string }>("createUpload", { project_id: projectId, name: file.name });
   const res = await supabase().storage.from("files").uploadToSignedUrl(path, token, file, { contentType: file.type || undefined });
-  if (res.error) throw new ApiError(`Upload failed: ${res.error.message}`, 500);
+  if (res.error) {
+    const big = /exceed|too large|maximum allowed size|413/i.test(res.error.message);
+    throw new ApiError(big ? `"${file.name}" is larger than storage allows. Export it as M4A or MP3 and try again.` : `The upload did not finish (${res.error.message}). Check your connection and try again.`, big ? 413 : 500);
+  }
   return { path, name: file.name, size: file.size, mime: file.type };
 }
 

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { FileAudio, FileText, MessageSquareText, NotebookPen, Paperclip, Upload } from "lucide-react";
-import { rpc, uploadFile } from "@/lib/client/api";
+import { MAX_UPLOAD_MB, rpc, uploadFile, uploadProblem } from "@/lib/client/api";
 import { toLocalInput } from "@/lib/client/format";
 import type { EventRow, EventSource, Project } from "@/lib/types";
 import { Button, ErrorNote, Field, Input, Modal, Select, Textarea, cx } from "./ui";
@@ -69,7 +69,12 @@ export function AddEventDialog({ open, onClose, projects, agentId, defaultProjec
 
   function pick(list: FileList | null) {
     if (!list) return;
-    const next = Array.from(list);
+    const all = Array.from(list);
+    // Say right away when a file cannot go through, instead of after a long upload.
+    const bad = all.map(uploadProblem).find(Boolean);
+    const next = all.filter((f) => !uploadProblem(f));
+    setError(bad ?? null);
+    if (next.length === 0) return;
     setFiles(kind === "texts" ? next.slice(0, 8) : kind === "files" ? next.slice(0, 10) : next.slice(0, 1));
     if (kind !== "files" && !title && next[0]) setTitle(next[0].name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").slice(0, 80));
   }
@@ -256,7 +261,7 @@ export function AddEventDialog({ open, onClose, projects, agentId, defaultProjec
                   <span className="font-medium text-ink">Choose {kind === "texts" ? "screenshots" : kind === "files" ? "photos or files" : "a file"}</span> or drop here
                 </span>
               )}
-              <span className="text-xs text-ink-3">{kind === "audio" ? "MP3, M4A, WAV, MP4 up to 500 MB" : kind === "transcript" ? "VTT, TXT, or DOCX" : kind === "files" ? "Up to 10 at a time. Your assistant sees them on the project" : "Up to 8 images of a text thread"}</span>
+              <span className="text-xs text-ink-3">{kind === "audio" ? `M4A, MP3, WAV or MP4, up to ${MAX_UPLOAD_MB} MB` : kind === "transcript" ? "VTT, TXT, or DOCX" : kind === "files" ? "Up to 10 at a time. Your assistant sees them on the project" : "Up to 8 images of a text thread"}</span>
             </button>
           </div>
         ) : null}
