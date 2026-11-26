@@ -313,6 +313,8 @@ export interface ProjectDetail {
   events: EventRow[];
   /** Approved or edited facts only. */
   facts: Fact[];
+  /** Verified facts that are done or were replaced later. Used by the timeline only. */
+  historyFacts?: Fact[];
   /** Insufficient facts. Empty in user views. */
   needsInput: Fact[];
   tasks: Task[];

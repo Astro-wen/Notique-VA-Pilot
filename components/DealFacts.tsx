@@ -35,6 +35,11 @@ export function FactRow({ fact, tz, action }: { fact: Fact; tz?: string; action?
             {fact.event_occurred_at ? `, ${dateOnly(fact.event_occurred_at, tz)}` : ""}
             <ChevronDown className={cx("h-3 w-3 transition-transform", open && "rotate-180")} />
           </button>
+        ) : fact.event_title ? (
+          <span className="inline-flex h-7 items-center gap-1 rounded-full border border-line px-2.5 text-xs text-ink-2">
+            {fact.event_title}
+            {fact.event_occurred_at ? `, ${dateOnly(fact.event_occurred_at, tz)}` : ""}
+          </span>
         ) : null}
         {fact.verdict !== "insufficient" ? (
           <span className="inline-flex items-center gap-1 text-xs text-ok">

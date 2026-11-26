@@ -130,11 +130,11 @@ function aaiKey(): string {
   return key;
 }
 
-export async function startTranscription(audioUrl: string): Promise<string> {
+export async function startTranscription(audioUrl: string, webhookUrl?: string | null): Promise<string> {
   const res = await fetch(`${AAI}/transcript`, {
     method: "POST",
     headers: { authorization: aaiKey(), "content-type": "application/json" },
-    body: JSON.stringify({ audio_url: audioUrl, speaker_labels: true, punctuate: true, format_text: true, language_detection: true }),
+    body: JSON.stringify({ audio_url: audioUrl, speaker_labels: true, punctuate: true, format_text: true, language_detection: true, ...(webhookUrl ? { webhook_url: webhookUrl } : {}) }),
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body.id) {

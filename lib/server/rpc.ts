@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { after } from "next/server";
 import { BUCKET, db } from "./supabase";
-import { nextBusinessDayNine, startOfWeekUtc } from "./time";
+import { nextBusinessDayNine, startOfWeekIn, startOfWeekUtc } from "./time";
 import {
   PipelineError,
   checkCondition,
@@ -63,7 +63,11 @@ type Handler = (ctx: Ctx, args: any) => Promise<unknown>;
 /* ------------------------------------------------------------------ */
 
 function q<T>(res: { data: T | null; error: { message: string } | null }): T {
-  if (res.error) throw new RpcError(`Database error: ${res.error.message}`, 500);
+  if (res.error) {
+    // Raised by the facts_guard trigger when a conversation was submitted while this change was on its way.
+    if (res.error.message.includes("EVENT_LOCKED")) throw new RpcError("This conversation was just submitted, so the change was not saved. Reopen it to make changes.", 409);
+    throw new RpcError(`Database error: ${res.error.message}`, 500);
+  }
   return res.data as T;
 }
 
@@ -358,9 +362,32 @@ async function signedUrl(path: string, seconds: number, download?: string): Prom
   return res.data.signedUrl;
 }
 
+/** Signs the callback so only the transcription service, for this one event, can trigger it. */
+export function sttToken(eventId: string): string {
+  const secret = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  return createHmac("sha256", secret).update(`stt:${eventId}`).digest("hex").slice(0, 40);
+}
+
+function sttWebhookUrl(eventId: string): string | null {
+  const host = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
+  if (!host) return null;
+  return `https://${host}/api/stt?e=${eventId}&k=${sttToken(eventId)}`;
+}
+
+/** Called by the transcription callback, so a recording moves on even when nobody has a page open. */
+export async function advanceEventById(eventId: string): Promise<void> {
+  const event = q(await db().from("events").select("*").eq("id", eventId).maybeSingle()) as any;
+  if (!event) return;
+  try {
+    await advanceEvent(event);
+  } catch (err) {
+    await failEvent(event.id, err);
+  }
+}
+
 async function startAudio(eventId: string, audioPath: string) {
   const url = await signedUrl(audioPath, 6 * 3600);
-  const sttId = await startTranscription(url);
+  const sttId = await startTranscription(url, sttWebhookUrl(eventId));
   await setEventStatus(eventId, "processing", { stt_id: sttId, error: null });
 }
 
@@ -495,6 +522,17 @@ async function decorateTasks(tasks: Task[]): Promise<Task[]> {
 async function decorateFiles(files: any[]): Promise<FileRow[]> {
   const names = await nameMap(files.map((f) => f.uploaded_by));
   return files.map((f) => ({ ...f, uploaded_by_name: f.uploaded_by ? names[f.uploaded_by] ?? null : null }));
+}
+
+/**
+ * A create request that is sent twice (a lost response, a double click, a retry) returns the row the first one made.
+ * Looks for an identical row from the same person in the last 30 seconds.
+ */
+async function recentTwin<T>(table: string, match: Record<string, unknown>): Promise<T | null> {
+  let query = db().from(table).select("*").gte("created_at", new Date(Date.now() - 30000).toISOString());
+  for (const [k, v] of Object.entries(match)) query = v === null ? query.is(k, null) : query.eq(k, v as string);
+  const res = await query.order("created_at", { ascending: false }).limit(1);
+  return ((res.data ?? [])[0] as T | undefined) ?? null;
 }
 
 /* ---------- Watches ---------- */
@@ -694,6 +732,7 @@ async function buildProject(project: Project, forAgent: boolean): Promise<Projec
 
   let facts: Fact[] = [];
   let needsInput: Fact[] = [];
+  let historyFacts: Fact[] = [];
   if (submittedIds.length) {
     const rows = q(
       await db()
@@ -702,7 +741,6 @@ async function buildProject(project: Project, forAgent: boolean): Promise<Projec
         .eq("project_id", project.id)
         .in("event_id", submittedIds)
         .in("verdict", forAgent ? ["approved", "edited"] : ["approved", "edited", "insufficient"])
-        .is("resolved_at", null)
         .order("created_at", { ascending: false }),
     ) as any[];
     const names = await nameMap(rows.map((r) => r.verified_by));
@@ -720,8 +758,10 @@ async function buildProject(project: Project, forAgent: boolean): Promise<Projec
       };
       return fact;
     });
-    facts = decorated.filter((f) => f.verdict === "approved" || f.verdict === "edited");
-    needsInput = forAgent ? [] : decorated.filter((f) => f.verdict === "insufficient");
+    facts = decorated.filter((f) => !f.resolved_at && (f.verdict === "approved" || f.verdict === "edited"));
+    // Kept for the timeline, so a conversation still shows what came out of it after an item is done or replaced.
+    historyFacts = decorated.filter((f) => f.resolved_at && (f.verdict === "approved" || f.verdict === "edited"));
+    needsInput = forAgent ? [] : decorated.filter((f) => !f.resolved_at && f.verdict === "insufficient");
   }
 
   const hidden = forAgent ? ["dismissed", "cancelled"] : ["dismissed"];
@@ -753,6 +793,7 @@ async function buildProject(project: Project, forAgent: boolean): Promise<Projec
     events: forAgent ? rawEvents.filter((e) => e.status === "submitted").map((e) => stripEvent(e, true)) : allEvents,
     processingEvents: allEvents.filter((e) => e.status === "processing" || e.status === "extracting").length,
     facts,
+    historyFacts,
     needsInput,
     tasks,
     files,
@@ -966,6 +1007,8 @@ export const handlers: Record<string, Handler> = {
     const agentId = p.role === "agent" ? p.id : str(args.agent_id, "Agent");
     await assertAgentAccess(p, agentId);
     const deal = ["buyer", "seller", "other"].includes(args.deal_type) ? args.deal_type : "buyer";
+    const twinProject = await recentTwin<Project>("projects", { agent_id: agentId, client_name: str(args.client_name, "Client name", 80), created_by: p.id });
+    if (twinProject) return twinProject;
     const row = q(
       await db()
         .from("projects")
@@ -1033,6 +1076,7 @@ export const handlers: Record<string, Handler> = {
     if (args.task_id) {
       const task = await loadTask(p, args.task_id);
       if (task.project_id !== project.id) throw new RpcError("That task belongs to a different project.");
+      if (kind === "deliverable" && !["received", "in_progress", "waiting"].includes(task.status)) throw new RpcError("This ticket is closed. Reload it before adding files.", 409);
       taskId = task.id;
     }
     let eventId: string | null = null;
@@ -1077,7 +1121,10 @@ export const handlers: Record<string, Handler> = {
     await loadProject(p, row.project_id);
     if (row.kind === "deliverable" && row.status === "delivered") throw new RpcError("Delivered files cannot be removed.");
     if (p.role === "agent" && row.uploaded_by !== p.id) throw new RpcError("You can only remove files you uploaded.", 403);
-    q(await db().from("files").delete().eq("id", row.id).select("id"));
+    let del = db().from("files").delete().eq("id", row.id);
+    if (row.kind === "deliverable") del = del.eq("status", "draft");
+    const gone = q(await del.select("id")) as any[];
+    if (gone.length === 0) throw new RpcError("This file was just delivered or removed, so it was not deleted.", 409);
     if (row.path) {
       const others = q(await db().from("files").select("id").eq("path", row.path).limit(1)) as any[];
       const events = q(await db().from("events").select("id").or(`audio_path.eq.${row.path},source_path.eq.${row.path}`).limit(1)) as any[];
@@ -1113,6 +1160,15 @@ export const handlers: Record<string, Handler> = {
     }
     if (!audioPath && !filePath && imagePaths.length === 0 && !enoughText(text)) {
       throw new RpcError("Add a recording, a file, or at least a few sentences of text.");
+    }
+    // The same upload sent twice returns the conversation the first request created.
+    const samePath = audioPath ?? filePath ?? imagePaths[0] ?? null;
+    if (samePath) {
+      const dup = q(await db().from("events").select("*").eq("project_id", project.id).or(`audio_path.eq.${samePath},source_path.eq.${samePath}`).limit(1)) as any[];
+      if (dup.length) return stripEvent(dup[0], p.role === "agent");
+    } else {
+      const dupText = await recentTwin<any>("events", { project_id: project.id, title: str(args.title, "Title", 120), created_by: p.id });
+      if (dupText && !dupText.audio_path && !dupText.source_path && (dupText.raw_text ?? "") === text) return stripEvent(dupText, p.role === "agent");
     }
     const occurred = optStr(args.occurred_at, 40);
     const occurredAt = occurred && !Number.isNaN(Date.parse(occurred)) ? new Date(occurred).toISOString() : new Date().toISOString();
@@ -1267,7 +1323,7 @@ export const handlers: Record<string, Handler> = {
 
     const now = Date.now();
     const endOfDay = now + 24 * 3600 * 1000;
-    const weekStart = startOfWeekUtc(new Date()).toISOString();
+    const weekStart = startOfWeekIn(new Date(), agent.timezone).toISOString();
     const verified = await db().from("events").select("id", { count: "exact", head: true }).eq("agent_id", agentId).eq("status", "submitted").gte("submitted_at", weekStart);
     const weekAgo = new Date(now - 7 * 24 * 3600 * 1000).toISOString();
     const recent = q(await db().from("events").select("source,created_at").eq("agent_id", agentId).gte("created_at", weekAgo)) as any[];
@@ -1355,7 +1411,9 @@ export const handlers: Record<string, Handler> = {
       patch.review_ms = Number(event.review_ms) + Math.min(Number(args.add_ms), 120000);
     }
     if (Object.keys(patch).length === 0) return { ok: true };
-    q(await db().from("events").update(patch).eq("id", event.id).select("id"));
+    // The condition is part of the write, so an edit that arrives after a submit cannot change what was published.
+    const saved = q(await db().from("events").update(patch).eq("id", event.id).eq("status", event.status).select("id")) as any[];
+    if (saved.length === 0 && Object.keys(patch).some((k) => k !== "review_ms")) throw new RpcError("This conversation just changed, so the edit was not saved. Reload it.", 409);
     return { ok: true };
   },
 
@@ -1371,6 +1429,8 @@ export const handlers: Record<string, Handler> = {
     if (typeof args.section === "string") {
       if (!["decisions", "budget", "needs", "questions", "risks", "next_steps"].includes(args.section)) throw new RpcError("Choose a section.");
       patch.section = args.section;
+      // A fact moved to another section no longer replaces the earlier fact it was matched with.
+      if (args.section !== fact.section) Object.assign(patch, { supersedes_id: null, change_type: "new", changed_from: null });
       // A suggested task only makes sense on a question or a next step.
       if (!["questions", "next_steps"].includes(args.section) && !("suggested_task" in args)) patch.suggested_task = null;
     }
@@ -1460,11 +1520,10 @@ export const handlers: Record<string, Handler> = {
     const checks = event.checks ?? {};
     const missing = (["consent", "pii", "fair_housing", "type_match"] as const).filter((k) => !checks[k]);
     if (missing.length) throw new RpcError("Confirm all four checks at the top of the page before submitting.");
-    const facts = q(await db().from("facts").select("*").eq("event_id", event.id)) as any[];
-    const pending = facts.filter((f) => f.verdict === "pending").length;
-    if (pending) throw new RpcError(`${pending} ${pending === 1 ? "item still needs" : "items still need"} a decision.`);
+    const precheck = q(await db().from("facts").select("verdict").eq("event_id", event.id)) as any[];
+    const waiting = precheck.filter((f) => f.verdict === "pending").length;
+    if (waiting) throw new RpcError(`${waiting} ${waiting === 1 ? "item still needs" : "items still need"} a decision.`);
 
-    const accepted = facts.filter((f) => f.verdict === "approved" || f.verdict === "edited");
     const now = new Date().toISOString();
     // Claim the event first so a double click or a second VA cannot submit it twice.
     const claimed = q(
@@ -1476,47 +1535,75 @@ export const handlers: Record<string, Handler> = {
         .select("id"),
     ) as any[];
     if (claimed.length === 0) throw new RpcError("This event is already submitted.");
-    const supersededIds = accepted.map((f) => f.supersedes_id).filter(Boolean);
-    if (supersededIds.length) {
-      q(await db().from("facts").update({ resolved_at: now }).in("id", supersededIds).select("id"));
-      // A suggestion that came from a fact which is no longer true should not stay in the agent's list.
-      q(await db().from("tasks").update({ status: "dismissed" }).in("origin_fact_id", supersededIds).eq("status", "suggested").select("id"));
-    }
 
-    const withTask = accepted.filter((f) => f.suggested_task && (f.section === "questions" || f.section === "next_steps"));
-    let created = 0;
-    if (withTask.length) {
-      const existing = q(await db().from("tasks").select("origin_fact_id").in("origin_fact_id", withTask.map((f) => f.id))) as any[];
-      const have = new Set(existing.map((e) => e.origin_fact_id));
-      const rows = withTask
-        .filter((f) => !have.has(f.id))
-        .map((f) => ({
-          project_id: event.project_id,
-          agent_id: event.agent_id,
-          title: f.suggested_task.title,
-          description: f.suggested_task.description || f.statement,
-          category: f.suggested_task.category || "Research",
-          est_minutes: f.suggested_task.est_minutes ?? null,
-          status: "suggested",
-          origin_fact_id: f.id,
-          origin_event_id: event.id,
-          created_by: p.id,
-        }));
-      if (rows.length) {
-        q(await db().from("tasks").insert(rows).select("id"));
-        created = rows.length;
+    const resolved: string[] = [];
+    const dismissed: string[] = [];
+    const createdIds: string[] = [];
+    const undo = async () => {
+      if (createdIds.length) await db().from("tasks").delete().in("id", createdIds).eq("status", "suggested");
+      if (dismissed.length) await db().from("tasks").update({ status: "suggested" }).in("id", dismissed).eq("status", "dismissed");
+      if (resolved.length) await db().from("facts").update({ resolved_at: null }).in("id", resolved);
+      await db().from("events").update({ status: "in_review", status_changed_at: new Date().toISOString(), submitted_at: null, submitted_by: null }).eq("id", event.id).eq("status", "submitted");
+    };
+    try {
+      // From here the facts are frozen by the database, so this read is the version being published.
+      const facts = q(await db().from("facts").select("*").eq("event_id", event.id)) as any[];
+      const pending = facts.filter((f) => f.verdict === "pending").length;
+      if (pending) throw new RpcError("An item changed while you were submitting. Check the list and submit again.", 409);
+      const accepted = facts.filter((f) => f.verdict === "approved" || f.verdict === "edited");
+
+      const supersededIds = accepted.map((f) => f.supersedes_id).filter(Boolean);
+      if (supersededIds.length) {
+        // Only the facts and suggestions this submit actually changes are recorded, so a reopen can put back exactly those.
+        const r = q(await db().from("facts").update({ resolved_at: now }).in("id", supersededIds).is("resolved_at", null).select("id")) as { id: string }[];
+        resolved.push(...r.map((x) => x.id));
+        // A suggestion that came from a fact which is no longer true should not stay in the agent's list.
+        const d = q(await db().from("tasks").update({ status: "dismissed" }).in("origin_fact_id", supersededIds).eq("status", "suggested").select("id")) as { id: string }[];
+        dismissed.push(...d.map((x) => x.id));
       }
-    }
 
-    await audit(p, "event.submit", "event", event.id, { accepted: accepted.length, tasks: created });
-    return { ok: true, project_id: event.project_id, suggested_tasks: created, accepted: accepted.length };
+      const withTask = accepted.filter((f) => f.suggested_task && (f.section === "questions" || f.section === "next_steps"));
+      if (withTask.length) {
+        const existing = q(await db().from("tasks").select("origin_fact_id").in("origin_fact_id", withTask.map((f) => f.id))) as any[];
+        const have = new Set(existing.map((e) => e.origin_fact_id));
+        for (const f of withTask.filter((x) => !have.has(x.id))) {
+          const ins = await db()
+            .from("tasks")
+            .insert({
+              project_id: event.project_id,
+              agent_id: event.agent_id,
+              title: f.suggested_task.title,
+              description: f.suggested_task.description || f.statement,
+              category: f.suggested_task.category || "Research",
+              est_minutes: f.suggested_task.est_minutes ?? null,
+              status: "suggested",
+              origin_fact_id: f.id,
+              origin_event_id: event.id,
+              created_by: p.id,
+            })
+            .select("id")
+            .single();
+          // 23505: another submit already suggested this follow-up. That is the outcome we want, not an error.
+          if (ins.error && ins.error.code !== "23505") throw new RpcError(`Database error: ${ins.error.message}`, 500);
+          if (ins.data) createdIds.push((ins.data as { id: string }).id);
+        }
+      }
+
+      await audit(p, "event.submit", "event", event.id, { accepted: accepted.length, tasks: createdIds.length, resolved, dismissed });
+      return { ok: true, project_id: event.project_id, suggested_tasks: createdIds.length, accepted: accepted.length };
+    } catch (err) {
+      // Nothing is left half published. The event goes back to review so it can be submitted again.
+      await undo().catch(() => {});
+      throw err;
+    }
   },
 
   async escalateEvent(ctx, args) {
     const p = staff(ctx);
     const event = await loadEvent(p, args.event_id);
     if (!["ready", "in_review"].includes(event.status)) throw new RpcError("Only events that are ready for review can be escalated.");
-    await setEventStatus(event.id, "escalated", { escalation_note: str(args.note, "Reason", 400) });
+    const moved = q(await db().from("events").update({ status: "escalated", status_changed_at: new Date().toISOString(), escalation_note: str(args.note, "Reason", 400) }).eq("id", event.id).in("status", ["ready", "in_review"]).select("id")) as any[];
+    if (moved.length === 0) throw new RpcError("This conversation just changed. Reload it.", 409);
     await audit(p, "event.escalate", "event", event.id);
     return { ok: true };
   },
@@ -1533,12 +1620,30 @@ export const handlers: Record<string, Handler> = {
       throw new RpcError("Events can be reopened for 24 hours after they are submitted.");
     }
     // Undo what the submit did: bring back facts this event replaced, and withdraw suggestions nobody has acted on.
-    const mine = q(await db().from("facts").select("supersedes_id").eq("event_id", event.id).not("supersedes_id", "is", null)) as { supersedes_id: string }[];
-    if (mine.length) {
-      q(await db().from("facts").update({ resolved_at: null }).in("id", mine.map((f) => f.supersedes_id)).select("id"));
+    const taken = q(await db().from("events").update({ status: "in_review", status_changed_at: new Date().toISOString(), submitted_at: null, submitted_by: null }).eq("id", event.id).eq("status", "submitted").select("id")) as any[];
+    if (taken.length === 0) throw new RpcError("This conversation just changed. Reload it.", 409);
+    const log = ((await db().from("audit_log").select("detail").eq("action", "event.submit").eq("object_id", event.id).order("at", { ascending: false }).limit(1)).data ?? []) as { detail: { resolved?: string[]; dismissed?: string[] } | null }[];
+    const record = log[0]?.detail;
+    let restore: string[];
+    if (Array.isArray(record?.resolved)) {
+      restore = record.resolved;
+    } else {
+      // Submitted before this bookkeeping existed: fall back to the facts this event's accepted items replaced.
+      const mine = q(await db().from("facts").select("supersedes_id").eq("event_id", event.id).in("verdict", ["approved", "edited"]).not("supersedes_id", "is", null)) as { supersedes_id: string }[];
+      restore = mine.map((f) => f.supersedes_id);
+    }
+    if (restore.length) {
+      // Leave a fact resolved when another submitted conversation also replaced it.
+      const others = q(await db().from("facts").select("supersedes_id,event_id").in("supersedes_id", restore).neq("event_id", event.id).in("verdict", ["approved", "edited"])) as { supersedes_id: string; event_id: string }[];
+      const otherEvents = others.length ? (q(await db().from("events").select("id").in("id", Array.from(new Set(others.map((o) => o.event_id)))).eq("status", "submitted")) as { id: string }[]).map((e) => e.id) : [];
+      const keep = new Set(others.filter((o) => otherEvents.includes(o.event_id)).map((o) => o.supersedes_id));
+      const back = restore.filter((id) => !keep.has(id));
+      if (back.length) q(await db().from("facts").update({ resolved_at: null }).in("id", back).select("id"));
+    }
+    if (Array.isArray(record?.dismissed) && record.dismissed.length) {
+      q(await db().from("tasks").update({ status: "suggested" }).in("id", record.dismissed).eq("status", "dismissed").select("id"));
     }
     q(await db().from("tasks").delete().eq("origin_event_id", event.id).eq("status", "suggested").select("id"));
-    await setEventStatus(event.id, "in_review", { submitted_at: null, submitted_by: null });
     await audit(p, "event.reopen", "event", event.id);
     return { ok: true };
   },
@@ -1577,6 +1682,8 @@ export const handlers: Record<string, Handler> = {
     const staffUser = isStaff(p);
     const via = staffUser ? str(args.requested_via, "How the user asked for this", 20) : "in_app";
     if (!["in_app", "text", "email", "call"].includes(via)) throw new RpcError("Choose how the user asked for this.");
+    const twinTask = await recentTwin<Task>("tasks", { project_id: project.id, title: str(args.title, "Title", 140), created_by: p.id, status: "received" });
+    if (twinTask && twinTask.description === longText(args.description, "Details", 2000)) return (await decorateTasks([twinTask]))[0];
     const row = q(
       await db()
         .from("tasks")
@@ -1618,9 +1725,9 @@ export const handlers: Record<string, Handler> = {
     const task = await loadTask(p, args.task_id);
     if (task.status !== "suggested") throw new RpcError("This task has already been handled.");
     const via = isStaff(p) ? str(args.requested_via, "How the user approved this", 20) : "in_app";
-    const row = q(
-      await db().from("tasks").update({ status: "received", assigned_at: new Date().toISOString(), requested_via: via }).eq("id", task.id).eq("status", "suggested").select("*").single(),
-    ) as Task;
+    const rows = q(await db().from("tasks").update({ status: "received", assigned_at: new Date().toISOString(), requested_via: via }).eq("id", task.id).eq("status", "suggested").select("*")) as Task[];
+    if (rows.length === 0) throw new RpcError("This task has already been handled.", 409);
+    const row = rows[0];
     await audit(p, "task.assign", "task", task.id, { via });
     return (await decorateTasks([row]))[0];
   },
@@ -1642,7 +1749,8 @@ export const handlers: Record<string, Handler> = {
     const p = me(ctx);
     const task = await loadTask(p, args.task_id);
     if (["delivered", "cancelled", "dismissed"].includes(task.status)) throw new RpcError("This task is already closed.");
-    q(await db().from("tasks").update({ status: "cancelled", ...pauseTimerPatch(task) }).eq("id", task.id).select("id"));
+    const done = q(await db().from("tasks").update({ status: "cancelled", ...pauseTimerPatch(task) }).eq("id", task.id).eq("status", task.status).select("id")) as any[];
+    if (done.length === 0) throw new RpcError("This request just changed. Reload it and try again.", 409);
     await systemMessage(task.id, `${p.role === "agent" ? "The user" : p.name} cancelled this task.`);
     await audit(p, "task.cancel", "task", task.id);
     return { ok: true };
@@ -1675,8 +1783,9 @@ export const handlers: Record<string, Handler> = {
       patch = pauseTimerPatch(task);
     }
     if (Object.keys(patch).length === 0) return (await decorateTasks([task]))[0];
-    const row = q(await db().from("tasks").update(patch).eq("id", task.id).select("*").single()) as Task;
-    return (await decorateTasks([row]))[0];
+    const rows = q(await db().from("tasks").update(patch).eq("id", task.id).eq("status", task.status).select("*")) as Task[];
+    if (rows.length === 0) throw new RpcError("This ticket just changed. Reload it and try again.", 409);
+    return (await decorateTasks([rows[0]]))[0];
   },
 
   async sendTaskMessage(ctx, args): Promise<TaskDetail["messages"][number]> {
@@ -1708,12 +1817,20 @@ export const handlers: Record<string, Handler> = {
     if (!["in_progress", "waiting"].includes(task.status)) throw new RpcError(task.status === "received" ? "Set an ETA before delivering." : "This task cannot be delivered in its current state.");
     const files = q(await db().from("files").select("id").eq("task_id", task.id).eq("kind", "deliverable")) as any[];
     if (files.length === 0) throw new RpcError("Add at least one deliverable before marking this delivered.");
-    q(await db().from("files").update({ status: "delivered" }).eq("task_id", task.id).eq("kind", "deliverable").select("id"));
-    const row = q(
-      await db().from("tasks").update({ status: "delivered", delivered_at: new Date().toISOString(), agent_feedback: null, ...pauseTimerPatch(task) }).eq("id", task.id).select("*").single(),
-    ) as Task;
-    await systemMessage(task.id, `${p.name} delivered ${files.length} ${files.length === 1 ? "file" : "files"}.`);
-    await audit(p, "task.deliver", "task", task.id, { files: files.length });
+    // Close the ticket first, on the state we read. Files are published only if that worked.
+    const closed = q(
+      await db().from("tasks").update({ status: "delivered", delivered_at: new Date().toISOString(), agent_feedback: null, ...pauseTimerPatch(task) }).eq("id", task.id).eq("status", task.status).select("*"),
+    ) as Task[];
+    if (closed.length === 0) throw new RpcError("This ticket just changed. Reload it and try again.", 409);
+    const row = closed[0];
+    const sent = q(await db().from("files").update({ status: "delivered" }).eq("task_id", task.id).eq("kind", "deliverable").select("id")) as any[];
+    if (sent.length === 0) {
+      // The last deliverable was removed while this was running. Put the ticket back.
+      await db().from("tasks").update({ status: task.status, delivered_at: null }).eq("id", task.id).eq("status", "delivered");
+      throw new RpcError("The deliverable was removed. Add one and deliver again.", 409);
+    }
+    await systemMessage(task.id, `${p.name} delivered ${sent.length} ${sent.length === 1 ? "file" : "files"}.`);
+    await audit(p, "task.deliver", "task", task.id, { files: sent.length });
     return (await decorateTasks([row]))[0];
   },
 
@@ -1785,6 +1902,8 @@ export const handlers: Record<string, Handler> = {
   async createWatch(ctx, args): Promise<Watch> {
     const p = staff(ctx);
     const project = await loadProject(p, args.project_id);
+    const twinWatch = await recentTwin<Watch>("watches", { project_id: project.id, condition: str(args.condition, "What to watch for", 300), created_by: p.id, status: "active" });
+    if (twinWatch) return twinWatch;
     const res = await db()
       .from("watches")
       .insert({ project_id: project.id, agent_id: project.agent_id, condition: str(args.condition, "What to watch for", 300), note: optStr(args.note, 500), created_by: p.id })
@@ -1884,7 +2003,7 @@ export const handlers: Record<string, Handler> = {
     return {
       project: { client_name: project.client_name, deal_type: project.deal_type, area: project.area, budget: project.budget } as Project,
       agentName: detail.agent.name,
-      vaName: detail.va?.name ?? null,
+      vaName: detail.va?.name ? detail.va.name.split(" ")[0] : null,
       facts: detail.facts.map(
         (f) =>
           ({
@@ -1897,7 +2016,8 @@ export const handlers: Record<string, Handler> = {
             changed_from: f.changed_from,
             follow_up_date: f.follow_up_date,
             follow_up_condition: f.follow_up_condition,
-            evidence: f.evidence.map((e) => ({ line_id: "", idx: e.idx, start_ms: e.start_ms, speaker: e.speaker, quote: e.quote })),
+            // The public page shows the verified statement and where it came from, never the raw transcript wording.
+            evidence: [] as Fact["evidence"],
             event_title: f.event_title,
             event_occurred_at: f.event_occurred_at,
             verified_by_name: f.verified_by_name ? f.verified_by_name.split(" ")[0] : null,

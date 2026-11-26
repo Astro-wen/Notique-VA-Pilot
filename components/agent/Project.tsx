@@ -242,7 +242,7 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
               </div>
               <div className="space-y-2 border-l border-line pl-4 ml-[3px]">
                 {events.map((e) => {
-                  const facts = data.facts.filter((f) => f.event_id === e.id);
+                  const facts = [...data.facts, ...(data.historyFacts ?? [])].filter((f) => f.event_id === e.id);
                   const open = openEvent === e.id;
                   return (
                     <Card key={e.id} className="p-3.5">
@@ -262,7 +262,10 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
                           {facts.slice(0, 3).map((f) => (
                             <li key={f.id} className="flex gap-2 text-sm text-ink-2">
                               <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-ink-3" />
-                              {f.statement}
+                              <span className={f.resolved_at ? "text-ink-3" : undefined}>
+                                {f.statement}
+                                {f.resolved_at ? " (done or updated since)" : ""}
+                              </span>
                             </li>
                           ))}
                         </ul>
@@ -391,12 +394,15 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
         onClose={() => setAdd(false)}
         projects={[data.project]}
         defaultProjectId={projectId}
-        onFilesAdded={(_pid, n) => {
+        onFilesAdded={(pid, n) => {
+          // Saved to a project created in the dialog: go there instead of staying on this one.
+          if (pid !== projectId) return window.location.assign(`/agent?project=${pid}`);
           reload(true);
           setTab("files");
           toast(n === 1 ? "File added. Your assistant can see it." : `${n} files added. Your assistant can see them.`);
         }}
         onCreated={(e) => {
+          if (e.project_id !== projectId) return window.location.assign(`/agent?project=${e.project_id}`);
           reload(true);
           toast(e.status === "failed" ? `We could not process it: ${e.error}` : "Received. Your assistant will verify it.", e.status === "failed" ? { tone: "error" } : undefined);
         }}

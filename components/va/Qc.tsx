@@ -64,7 +64,7 @@ export function Qc({ nav }: { nav: VaNav }) {
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <Card className="space-y-3 p-4">
               <h2 className="text-[15px] font-semibold">What happened to AI drafts</h2>
-              {aiTotal === 0 ? <p className="text-[13px] text-ink-3">No submitted events in this period.</p> : null}
+              {aiTotal === 0 ? <p className="text-[13px] text-ink-3">No AI drafts were decided in this period.</p> : null}
               {aiTotal > 0 ? (
                 <>
                   <Bar label="Approved as written" value={v.approved} total={aiTotal} />

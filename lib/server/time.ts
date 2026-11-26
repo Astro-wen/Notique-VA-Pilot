@@ -46,3 +46,14 @@ export function startOfWeekUtc(now: Date): Date {
   d.setUTCDate(d.getUTCDate() - day);
   return d;
 }
+
+/** Monday 00:00 of the current week in the given time zone. */
+export function startOfWeekIn(now: Date, tz: string): Date {
+  const timeZone = safeZone(tz);
+  const offset = tzOffsetMinutes(now, timeZone);
+  const local = new Date(now.getTime() + offset * 60000);
+  const monday = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()));
+  monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
+  const guess = new Date(monday.getTime() - offset * 60000);
+  return new Date(monday.getTime() - tzOffsetMinutes(guess, timeZone) * 60000);
+}
