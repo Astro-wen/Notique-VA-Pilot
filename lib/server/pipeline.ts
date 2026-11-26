@@ -439,3 +439,91 @@ export function formatMs(ms: number): string {
   const mm = String(m).padStart(h ? 2 : 1, "0");
   return `${h ? `${h}:` : ""}${mm}:${String(s).padStart(2, "0")}`;
 }
+
+
+/* ------------------------------------------------------------------ */
+/* Watches: a condition checked against the live web                    */
+/* ------------------------------------------------------------------ */
+
+export interface WatchResult {
+  met: boolean;
+  /** One or two sentences on what was found, with the figure and its date. */
+  summary: string;
+  sources: { title: string; url: string }[];
+  model: string | null;
+}
+
+const WATCH_PROMPT = `You check whether a real estate market condition is currently true, using web search.
+Today is {today}.
+Rules:
+1. Search for current, dated figures from primary or well known sources (for mortgage rates: Freddie Mac, Mortgage News Daily, Bankrate; for listings and prices: the listing portals or the local association).
+2. Only answer met=true when a source dated within the last 7 days clearly supports it. If the evidence is old, mixed, or missing, answer met=false and say what you found.
+3. The summary states the figure, the source name, and the date of the figure, in at most two sentences. No advice.
+4. Never include names of private people in searches.
+Return only JSON: {"met": true or false, "summary": "...", "sources": [{"title": "...", "url": "https://..."}]}`;
+
+/** Asks a model with live web search whether the condition holds right now. */
+export async function checkCondition(condition: string): Promise<WatchResult> {
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key) throw new PipelineError("AI is not configured. Add OPENROUTER_API_KEY in Vercel and redeploy.");
+  const configured = (process.env.OPENROUTER_WATCH_MODEL ?? process.env.OPENROUTER_MODEL ?? "").split(",").map((m) => m.trim()).filter(Boolean);
+  const model = configured[0] ?? DEFAULT_MODELS[0];
+  const messages = [
+    { role: "system", content: WATCH_PROMPT.replace("{today}", new Date().toISOString().slice(0, 10)) },
+    { role: "user", content: `Condition to check: ${condition.slice(0, 500)}` },
+  ];
+  // The server tool is the current interface. The plugin form is kept as a fallback for accounts or models that reject it.
+  const variants: Record<string, unknown>[] = [{ tools: [{ type: "openrouter:web_search", parameters: { max_results: 5 } }] }, { plugins: [{ id: "web", max_results: 5 }] }];
+  let lastError = "";
+  for (const extra of variants) {
+    let res: Response;
+    try {
+      res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        signal: AbortSignal.timeout(90000),
+        method: "POST",
+        headers: { authorization: `Bearer ${key}`, "content-type": "application/json", "x-title": "Notique VA Console" },
+        body: JSON.stringify({ model, messages, temperature: 0, ...extra }),
+      });
+    } catch (err) {
+      lastError = (err as Error)?.name === "TimeoutError" ? "The search took too long." : "Could not reach the model.";
+      continue;
+    }
+    const body = await res.json().catch(() => ({}));
+    const message = body?.choices?.[0]?.message;
+    const content: unknown = message?.content;
+    if (!res.ok || typeof content !== "string" || !content.trim()) {
+      lastError = body?.error?.message ?? res.statusText ?? "Unknown error";
+      if (res.status === 401 || res.status === 402) break;
+      continue;
+    }
+    const parsed = parseLooseJson(content) as { met?: unknown; summary?: unknown; sources?: unknown } | null;
+    if (!parsed || typeof parsed.summary !== "string") {
+      lastError = "The model did not return a usable answer.";
+      continue;
+    }
+    const sources: { title: string; url: string }[] = [];
+    const push = (title: unknown, url: unknown) => {
+      if (typeof url !== "string" || !/^https?:\/\//i.test(url) || sources.some((x) => x.url === url)) return;
+      sources.push({ title: typeof title === "string" && title.trim() ? title.trim().slice(0, 140) : new URL(url).hostname, url: url.slice(0, 500) });
+    };
+    // Prefer the citations the search engine attached over links the model typed out.
+    for (const a of Array.isArray(message?.annotations) ? message.annotations : []) push(a?.url_citation?.title, a?.url_citation?.url);
+    for (const x of Array.isArray(parsed.sources) ? parsed.sources : []) push((x as { title?: unknown })?.title, (x as { url?: unknown })?.url);
+    // Without a source there is nothing for the VA to verify, so it never counts as met.
+    return { met: parsed.met === true && sources.length > 0, summary: parsed.summary.trim().slice(0, 600), sources: sources.slice(0, 5), model: typeof body?.model === "string" ? body.model : model };
+  }
+  throw new PipelineError(`The check could not run: ${lastError}`);
+}
+
+/** Drafts the note a user could send their client once a watched condition is met. A VA reviews it before delivery. */
+export async function draftFollowUp(input: { clientName: string; condition: string; finding: string; note: string | null; facts: string[] }): Promise<string> {
+  const raw = (await chatJson([
+    {
+      role: "system",
+      content:
+        'You draft a short follow-up message a real estate agent sends to their own client. Use only the verified facts given. Be specific about what changed and why it matters to this client, suggest one next step, and keep it under 110 words. No pressure tactics, no promises about the market, and never mention race, religion, national origin, sex, disability, family status, or age. Return JSON: {"message": "..."}',
+    },
+    { role: "user", content: JSON.stringify({ client: input.clientName, condition_now_true: input.condition, what_we_found: input.finding, why_it_matters: input.note, verified_facts_about_this_deal: input.facts.slice(0, 25) }) },
+  ])) as { message?: unknown } | null;
+  return typeof raw?.message === "string" ? raw.message.trim().slice(0, 1200) : "";
+}

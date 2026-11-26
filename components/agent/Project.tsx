@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { BadgeCheck, ChevronRight, Clock, FileText, Plus, Sparkles } from "lucide-react";
+import { BadgeCheck, ChevronRight, Clock, FileText, Plus, Radar, Sparkles } from "lucide-react";
 import { rpc } from "@/lib/client/api";
 import { SOURCE_LABEL, dateOnly, dateTime, projectLine } from "@/lib/client/format";
 import type { EventRow, Fact, ProjectDetail, Task } from "@/lib/types";
@@ -187,6 +187,24 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
               <span>
                 {data.pendingEvents} new {data.pendingEvents === 1 ? "conversation is" : "conversations are"} being verified{data.va ? ` by ${vaName}` : ""}. {data.pendingDue ? `Ready by ${dateTime(data.pendingDue, tz, true)}.` : "Expect an update by 9:00 AM the next business day."}
               </span>
+            </div>
+          ) : null}
+          {data.watches?.length ? (
+            <div className="rounded-xl border border-line bg-white p-3.5">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-3">
+                <Radar className="h-3.5 w-3.5" /> {vaName === "your assistant" ? "Your assistant" : vaName} is watching for
+              </div>
+              <ul className="mt-2 space-y-2">
+                {data.watches.map((w) => (
+                  <li key={w.id} className="text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span>{w.condition}</span>
+                      {w.status === "met" ? <Badge tone="ok">Happened {dateOnly(w.met_at, tz)}</Badge> : <span className="text-xs text-ink-3">Checked daily</span>}
+                    </div>
+                    {w.status === "met" && w.last_result?.summary ? <p className="mt-0.5 text-[13px] text-ink-3">{w.last_result.summary} A follow-up is being prepared for you under Requests.</p> : null}
+                  </li>
+                ))}
+              </ul>
             </div>
           ) : null}
           {data.facts.length === 0 ? (

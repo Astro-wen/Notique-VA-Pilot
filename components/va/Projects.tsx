@@ -10,6 +10,7 @@ import { AddFile, FileItem } from "../FileList";
 import { Badge, Button, Card, Empty, ErrorNote, Field, IconButton, Input, Modal, Select, Spinner, Tabs, cx, useLoad, useToast } from "../ui";
 import type { VaNav } from "./Console";
 import { NewTicketDialog, STATUS_TONE, Ticket } from "./Ticket";
+import { Watches } from "./Watches";
 
 function ProjectDialog({ open, onClose, agentId, project, onSaved }: { open: boolean; onClose: () => void; agentId: string; project?: Project; onSaved: (p: Project) => void }) {
   const toast = useToast();
@@ -229,7 +230,7 @@ export function ProjectView({ nav, projectId, tab, taskId }: { nav: VaNav; proje
   const { project } = data;
   const tz = data.agent.timezone;
   const setTab = (key: string, extra?: Record<string, string | undefined>) => nav.go("project", { id: projectId, tab: key, ...extra });
-  const current = ["tickets", "profile", "documents", "completed"].includes(tab) ? tab : "tickets";
+  const current = ["tickets", "profile", "documents", "watches", "completed"].includes(tab) ? tab : "tickets";
   const openTasks = data.tasks.filter((t) => ["received", "in_progress", "waiting"].includes(t.status));
   const delivered = data.tasks.filter((t) => t.status === "delivered");
   const selected = taskId ? data.tasks.find((t) => t.id === taskId) ?? null : null;
@@ -301,9 +302,12 @@ export function ProjectView({ nav, projectId, tab, taskId }: { nav: VaNav; proje
           { key: "tickets", label: "Tickets", count: openTasks.length },
           { key: "profile", label: "Deal profile", count: data.needsInput.length },
           { key: "documents", label: "Documents", count: documents.length },
+          { key: "watches", label: "Watches", count: (data.watches ?? []).filter((w) => w.status === "active").length },
           { key: "completed", label: "Completed", count: delivered.length },
         ]}
       />
+
+      {current === "watches" ? <Watches projectId={projectId} watches={data.watches} tz={tz} onChanged={() => reload(true)} onOpenTicket={(id) => setTab("tickets", { task: id })} /> : null}
 
       {current === "tickets" ? (
         <div className="mt-4 grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">

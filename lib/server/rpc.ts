@@ -1,10 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { randomBytes, randomUUID } from "node:crypto";
+import { after } from "next/server";
 import { BUCKET, db } from "./supabase";
 import { nextBusinessDayNine, startOfWeekUtc } from "./time";
 import {
   PipelineError,
+  checkCondition,
   docxToText,
+  draftFollowUp,
   extractFacts,
   getTranscription,
   lastModelUsed,
@@ -36,6 +39,9 @@ import type {
   TaskDetail,
   TaskMessage,
   Verdict,
+  CheckinItem,
+  CheckinResult,
+  Watch,
 } from "@/lib/types";
 
 export class RpcError extends Error {
@@ -269,6 +275,38 @@ async function processText(eventId: string, text: string) {
   await runExtraction(eventId);
 }
 
+/** Reads an uploaded file, a set of screenshots, or pasted text into transcript lines, then drafts facts. */
+async function ingestSource(eventId: string, src: { imagePaths?: string[]; filePath?: string | null; text?: string | null }) {
+  let body = src.text ?? "";
+  if (src.imagePaths?.length) {
+    const urls = await Promise.all(src.imagePaths.map((path) => signedUrl(path, 1800)));
+    body = await transcribeScreenshots(urls);
+  } else if (src.filePath) {
+    const dl = await db().storage.from(BUCKET).download(src.filePath);
+    if (dl.error || !dl.data) throw new PipelineError(`Could not read the uploaded file: ${dl.error?.message ?? "unknown error"}`);
+    const buffer = Buffer.from(await dl.data.arrayBuffer());
+    body = /\.docx$/i.test(src.filePath) ? await docxToText(buffer) : buffer.toString("utf8");
+  }
+  q(await db().from("events").update({ raw_text: body.slice(0, 400000) }).eq("id", eventId).select("id"));
+  await processText(eventId, body);
+}
+
+/** Runs slow work after the response has been sent, so dialogs never wait on the AI. */
+function inBackground(eventId: string, work: () => Promise<void>) {
+  const run = async () => {
+    try {
+      await work();
+    } catch (err) {
+      await failEvent(eventId, err).catch(() => {});
+    }
+  };
+  try {
+    after(run);
+  } catch {
+    void run();
+  }
+}
+
 async function signedUrl(path: string, seconds: number, download?: string): Promise<string> {
   const res = await db().storage.from(BUCKET).createSignedUrl(path, seconds, download ? { download } : undefined);
   if (res.error || !res.data) throw new RpcError(`Could not open file: ${res.error?.message ?? "unknown error"}`, 500);
@@ -328,7 +366,15 @@ async function advanceEvent(event: any): Promise<void> {
     ) as any[];
     if (claimed.length === 0) return;
     try {
-      await runExtraction(event.id);
+      const lines = q(await db().from("transcript_lines").select("id").eq("event_id", event.id).limit(1)) as any[];
+      if (lines.length) {
+        await runExtraction(event.id);
+      } else if (event.raw_text) {
+        await processText(event.id, event.raw_text);
+      } else {
+        // The background read never finished. Fail it so Retry can pick it up again.
+        throw new PipelineError("Reading this upload did not finish. Press Retry.");
+      }
     } catch (err) {
       await failEvent(event.id, err);
     }
@@ -404,6 +450,155 @@ async function decorateTasks(tasks: Task[]): Promise<Task[]> {
 async function decorateFiles(files: any[]): Promise<FileRow[]> {
   const names = await nameMap(files.map((f) => f.uploaded_by));
   return files.map((f) => ({ ...f, uploaded_by_name: f.uploaded_by ? names[f.uploaded_by] ?? null : null }));
+}
+
+/* ---------- Watches ---------- */
+
+/** Null when the table is missing, so the rest of the product keeps working before the migration is applied. */
+async function projectWatches(projectId: string, forAgent: boolean): Promise<Watch[] | null> {
+  const res = await db().from("watches").select("*").eq("project_id", projectId).neq("status", "closed").order("created_at", { ascending: false });
+  if (res.error) return null;
+  const rows = (res.data ?? []) as Watch[];
+  // Users see what is being watched and whether it happened, not the working notes.
+  return forAgent ? rows.filter((w) => w.status !== "paused").map((w) => ({ ...w, note: null, last_result: w.last_result ? { met: w.last_result.met, summary: w.status === "met" ? w.last_result.summary : "", sources: w.status === "met" ? w.last_result.sources : [] } : null })) : rows;
+}
+
+function watchesMissing(): RpcError {
+  return new RpcError("Watches are not set up yet. Ask your admin to run the watches migration in Supabase.", 503);
+}
+
+/**
+ * Checks one watch against the live web. When the condition is newly met it opens a ticket
+ * with what was found and a drafted client note, for the VA to review and deliver.
+ */
+async function runWatch(watch: Watch, actor: Profile | null): Promise<Watch> {
+  const now = new Date().toISOString();
+  let result: Watch["last_result"];
+  try {
+    const r = await checkCondition(watch.condition);
+    result = { met: r.met, summary: r.summary, sources: r.sources };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "The check could not run.";
+    const failed = { met: false, summary: watch.last_result?.summary ?? "", sources: watch.last_result?.sources ?? [], error: message };
+    return q(await db().from("watches").update({ last_checked_at: now, last_result: failed }).eq("id", watch.id).select("*").single()) as Watch;
+  }
+  const patch: Record<string, unknown> = { last_checked_at: now, last_result: result };
+  if (result.met && watch.status === "active") {
+    // Claim it first so two checks running together cannot open two tickets.
+    const claimed = q(await db().from("watches").update({ ...patch, status: "met", met_at: now }).eq("id", watch.id).eq("status", "active").select("*")) as Watch[];
+    if (claimed.length === 0) return q(await db().from("watches").select("*").eq("id", watch.id).single()) as Watch;
+    const project = q(await db().from("projects").select("*").eq("id", watch.project_id).single()) as Project;
+    const submitted = q(await db().from("events").select("id").eq("project_id", project.id).eq("status", "submitted")) as { id: string }[];
+    const facts = submitted.length
+      ? (q(await db().from("facts").select("section,statement").eq("project_id", project.id).in("event_id", submitted.map((e) => e.id)).in("verdict", ["approved", "edited"]).is("resolved_at", null).limit(40)) as { section: string; statement: string }[])
+      : [];
+    let draft = "";
+    try {
+      draft = await draftFollowUp({ clientName: project.client_name, condition: watch.condition, finding: result.summary, note: watch.note, facts: facts.map((f) => `${f.section}: ${f.statement}`) });
+    } catch {
+      draft = "";
+    }
+    const description = [
+      `Watched condition is now true: ${watch.condition}`,
+      `What we found: ${result.summary}`,
+      result.sources.length ? `Sources: ${result.sources.map((x) => x.url).join(" ")}` : "",
+      watch.note ? `Why it matters: ${watch.note}` : "",
+      draft ? `Draft note to the client, check it against the sources before delivering:\n${draft}` : "Draft a short note the user can send to this client.",
+    ]
+      .filter(Boolean)
+      .join("\n\n")
+      .slice(0, 2000);
+    const task = q(
+      await db()
+        .from("tasks")
+        .insert({ project_id: project.id, agent_id: project.agent_id, title: `Follow up: ${watch.condition}`.slice(0, 140), description, category: "Follow-up draft", status: "received", requested_via: "watch", assigned_at: now, created_by: actor?.id ?? null })
+        .select("*")
+        .single(),
+    ) as Task;
+    await systemMessage(task.id, "Opened automatically because a watched condition was met.");
+    await audit(actor, "watch.met", "watch", watch.id, { task_id: task.id });
+    return q(await db().from("watches").update({ task_id: task.id }).eq("id", watch.id).select("*").single()) as Watch;
+  }
+  return q(await db().from("watches").update(patch).eq("id", watch.id).select("*").single()) as Watch;
+}
+
+/** Daily job: checks every active watch that has not been checked in the last 20 hours. */
+export async function runDueWatches(budgetMs = 240000): Promise<{ checked: number; met: number; skipped: number }> {
+  const started = Date.now();
+  const cutoff = new Date(Date.now() - 20 * 3600 * 1000).toISOString();
+  const res = await db().from("watches").select("*").eq("status", "active").or(`last_checked_at.is.null,last_checked_at.lt.${cutoff}`).order("last_checked_at", { ascending: true, nullsFirst: true }).limit(60);
+  if (res.error) return { checked: 0, met: 0, skipped: 0 };
+  const rows = (res.data ?? []) as Watch[];
+  let checked = 0;
+  let met = 0;
+  for (const w of rows) {
+    if (Date.now() - started > budgetMs) break;
+    const after = await runWatch(w, null).catch(() => null);
+    checked += 1;
+    if (after?.status === "met") met += 1;
+  }
+  return { checked, met, skipped: rows.length - checked };
+}
+
+async function loadWatch(p: Profile, watchId: unknown): Promise<Watch> {
+  const res = await db().from("watches").select("*").eq("id", str(watchId, "Watch")).maybeSingle();
+  if (res.error) throw watchesMissing();
+  if (!res.data) throw new RpcError("Watch not found.", 404);
+  await assertAgentAccess(p, (res.data as Watch).agent_id);
+  return res.data as Watch;
+}
+
+/* ---------- Daily check-in ---------- */
+
+function daysSince(iso: string | null | undefined): number {
+  if (!iso) return 0;
+  return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000));
+}
+
+async function buildCheckin(p: Profile, agentId: string): Promise<CheckinResult> {
+  const agent = q(await db().from("profiles").select("name,timezone").eq("id", agentId).single()) as { name: string; timezone: string };
+  const projects = q(await db().from("projects").select("id,client_name").eq("agent_id", agentId)) as { id: string; client_name: string }[];
+  const pname = (id: string) => projects.find((x) => x.id === id)?.client_name ?? "";
+  const tasks = q(await db().from("tasks").select("*").eq("agent_id", agentId).in("status", ["suggested", "waiting", "delivered"]).order("created_at", { ascending: true }).limit(200)) as Task[];
+  const items: CheckinItem[] = [];
+  for (const t of tasks) {
+    const base = { id: t.id, project_id: t.project_id, project_name: pname(t.project_id), title: t.title, task_id: t.id, task_number: t.number };
+    if (t.status === "waiting") items.push({ ...base, kind: "waiting", days: daysSince(t.assigned_at ?? t.created_at) });
+    else if (t.status === "suggested") items.push({ ...base, kind: "suggested", days: daysSince(t.created_at) });
+    else if (t.status === "delivered" && !t.agent_feedback && daysSince(t.delivered_at) <= 14) items.push({ ...base, kind: "unreviewed", days: daysSince(t.delivered_at) });
+  }
+  // Open questions for the client that the user has not marked as answered.
+  const submitted = q(await db().from("events").select("id").eq("agent_id", agentId).eq("status", "submitted")) as { id: string }[];
+  if (submitted.length) {
+    const questions = q(
+      await db().from("facts").select("id,project_id,statement,created_at").in("event_id", submitted.map((e) => e.id).slice(0, 300)).eq("section", "questions").in("verdict", ["approved", "edited"]).is("resolved_at", null).order("created_at", { ascending: true }).limit(40),
+    ) as { id: string; project_id: string; statement: string; created_at: string }[];
+    for (const f of questions) items.push({ kind: "question", id: f.id, project_id: f.project_id, project_name: pname(f.project_id), title: f.statement, days: daysSince(f.created_at), task_id: null, task_number: null });
+  }
+  const order = { waiting: 0, suggested: 1, unreviewed: 2, question: 3 } as const;
+  items.sort((a, b) => order[a.kind] - order[b.kind] || b.days - a.days);
+
+  const logs = ((await db().from("audit_log").select("actor_id,detail,at").eq("action", "checkin.sent").eq("object_id", agentId).order("at", { ascending: false }).limit(8)).data ?? []) as { actor_id: string | null; detail: { channel?: string; count?: number; note?: string | null } | null; at: string }[];
+  const names = await nameMap(logs.map((l) => l.actor_id));
+  const history = logs.map((l) => ({ at: l.at, by: (l.actor_id && names[l.actor_id]) || "VA", channel: l.detail?.channel ?? "text", count: l.detail?.count ?? 0, note: l.detail?.note ?? null }));
+  const last = history[0] ?? null;
+  const doneToday = !!last && Date.now() - new Date(last.at).getTime() < 18 * 3600 * 1000;
+
+  const first = (agent.name || "there").split(" ")[0];
+  const mine = (p.name || "your assistant").split(" ")[0];
+  const top = items.slice(0, 6);
+  const line = (it: CheckinItem, i: number) => {
+    const who = it.project_name ? ` (${it.project_name})` : "";
+    const stale = it.days >= 2 ? ` Open ${it.days} days.` : "";
+    if (it.kind === "waiting") return `${i + 1}. I need your answer to finish: ${it.title}${who}.${stale}`;
+    if (it.kind === "suggested") return `${i + 1}. Suggested follow-up: ${it.title}${who}.${stale}${it.days >= 1 ? " Want me to take it?" : ""}`;
+    if (it.kind === "unreviewed") return `${i + 1}. I delivered: ${it.title}${who}. Did you get to use it?`;
+    return `${i + 1}. Still open with the client: ${it.title}${who}.${it.days >= 2 ? " Have you asked, or should I draft the message?" : ""}`;
+  };
+  const message = top.length
+    ? [`Hi ${first}, ${mine} here with today's check-in.`, ...top.map(line), items.length > top.length ? `Plus ${items.length - top.length} more in Notique.` : "", "Reply with the numbers you want me to handle, or tell me what is already done."].filter(Boolean).join("\n")
+    : "";
+  return { items, message, last, history, doneToday };
 }
 
 async function buildProject(project: Project, forAgent: boolean): Promise<ProjectDetail> {
@@ -484,6 +679,7 @@ async function buildProject(project: Project, forAgent: boolean): Promise<Projec
     pendingEvents: allEvents.filter((e) => ["processing", "extracting", "ready", "in_review"].includes(e.status)).length,
     pendingDue: allEvents.filter((e) => ["processing", "extracting", "ready", "in_review"].includes(e.status) && e.due_at).map((e) => e.due_at as string).sort().pop() ?? null,
     lastVerified,
+    watches: await projectWatches(project.id, forAgent),
   };
 }
 
@@ -849,27 +1045,18 @@ export const handlers: Record<string, Handler> = {
         .select("*")
         .single(),
     ) as any;
-    await audit(p, "event.create", "event", event.id, { source });
+    // The screenshot paths are kept here so a failed read can be retried later.
+    await audit(p, "event.create", "event", event.id, { source, image_paths: imagePaths.length ? imagePaths : undefined });
 
-    try {
-      if (audioPath) {
+    if (audioPath) {
+      try {
         await startAudio(event.id, audioPath);
-      } else {
-        let body = text;
-        if (imagePaths.length) {
-          const urls = await Promise.all(imagePaths.map((path) => signedUrl(path, 1800)));
-          body = await transcribeScreenshots(urls);
-        } else if (filePath) {
-          const dl = await db().storage.from(BUCKET).download(filePath);
-          if (dl.error || !dl.data) throw new PipelineError(`Could not read the uploaded file: ${dl.error?.message ?? "unknown error"}`);
-          const buffer = Buffer.from(await dl.data.arrayBuffer());
-          body = /\.docx$/i.test(filePath) ? await docxToText(buffer) : buffer.toString("utf8");
-        }
-        q(await db().from("events").update({ raw_text: body.slice(0, 400000) }).eq("id", event.id).select("id"));
-        await processText(event.id, body);
+      } catch (err) {
+        await failEvent(event.id, err);
       }
-    } catch (err) {
-      await failEvent(event.id, err);
+    } else {
+      // Reading and fact drafting can take a minute. The upload dialog closes now and the pages poll for the result.
+      inBackground(event.id, () => ingestSource(event.id, { imagePaths, filePath, text }));
     }
     return stripEvent(q(await db().from("events").select("*").eq("id", event.id).single()), p.role === "agent");
   },
@@ -922,6 +1109,12 @@ export const handlers: Record<string, Handler> = {
       } else if (event.raw_text) {
         await setEventStatus(event.id, "extracting", { error: null });
         await processText(event.id, event.raw_text);
+      } else if (event.source_path) {
+        // A screenshot thread or an uploaded file that could not be read the first time.
+        const made = (await db().from("audit_log").select("detail").eq("action", "event.create").eq("object_id", event.id).limit(1)).data as { detail: { image_paths?: string[] } | null }[] | null;
+        const images = made?.[0]?.detail?.image_paths ?? (/\.(png|jpe?g|webp|gif|heic)$/i.test(event.source_path) ? [event.source_path] : []);
+        await setEventStatus(event.id, "extracting", { error: null });
+        await ingestSource(event.id, images.length ? { imagePaths: images } : { filePath: event.source_path });
       } else {
         throw new PipelineError("There is nothing to retry. Delete this event and upload the source again.");
       }
@@ -1459,7 +1652,66 @@ export const handlers: Record<string, Handler> = {
     await assertAgentAccess(p, agentId);
     const ev = await db().from("events").select("id", { count: "exact", head: true }).eq("agent_id", agentId).in("status", ["ready", "in_review"]);
     const tk = await db().from("tasks").select("id", { count: "exact", head: true }).eq("agent_id", agentId).in("status", ["received", "in_progress", "waiting"]);
-    return { queue: ev.count ?? 0, tasks: tk.count ?? 0 };
+    const checkin = await buildCheckin(p, agentId).catch(() => null);
+    return { queue: ev.count ?? 0, tasks: tk.count ?? 0, checkin: checkin && !checkin.doneToday ? checkin.items.length : 0 };
+  },
+
+  /* ---------- Daily check-in ---------- */
+
+  async vaCheckin(ctx, args): Promise<CheckinResult> {
+    const p = staff(ctx);
+    const agentId = str(args.agent_id, "User");
+    await assertAgentAccess(p, agentId);
+    return buildCheckin(p, agentId);
+  },
+
+  /** Records that the VA checked in with the user today, and by which channel. */
+  async logCheckin(ctx, args): Promise<CheckinResult> {
+    const p = staff(ctx);
+    const agentId = str(args.agent_id, "User");
+    await assertAgentAccess(p, agentId);
+    const channel = ["text", "email", "call"].includes(args.channel) ? args.channel : "text";
+    const current = await buildCheckin(p, agentId);
+    await audit(p, "checkin.sent", "agent", agentId, { channel, count: current.items.length, note: optStr(args.note, 300) });
+    return buildCheckin(p, agentId);
+  },
+
+  /* ---------- Watches ---------- */
+
+  async createWatch(ctx, args): Promise<Watch> {
+    const p = staff(ctx);
+    const project = await loadProject(p, args.project_id);
+    const res = await db()
+      .from("watches")
+      .insert({ project_id: project.id, agent_id: project.agent_id, condition: str(args.condition, "What to watch for", 300), note: optStr(args.note, 500), created_by: p.id })
+      .select("*")
+      .single();
+    if (res.error) throw watchesMissing();
+    await audit(p, "watch.create", "watch", (res.data as Watch).id);
+    return res.data as Watch;
+  },
+
+  async updateWatch(ctx, args): Promise<Watch> {
+    const p = staff(ctx);
+    const watch = await loadWatch(p, args.watch_id);
+    const patch: Record<string, unknown> = {};
+    if (typeof args.condition === "string") patch.condition = str(args.condition, "What to watch for", 300);
+    if ("note" in args) patch.note = optStr(args.note, 500);
+    if (["active", "paused", "closed"].includes(args.status)) {
+      patch.status = args.status;
+      // Watching again starts fresh, so the next hit opens a new ticket.
+      if (args.status === "active" && watch.status === "met") Object.assign(patch, { met_at: null, task_id: null });
+    }
+    if (Object.keys(patch).length === 0) return watch;
+    return q(await db().from("watches").update(patch).eq("id", watch.id).select("*").single()) as Watch;
+  },
+
+  /** Runs the check now instead of waiting for the daily run. */
+  async checkWatch(ctx, args): Promise<Watch> {
+    const p = staff(ctx);
+    const watch = await loadWatch(p, args.watch_id);
+    if (watch.status !== "active") throw new RpcError("Only an active watch can be checked. Resume it first.");
+    return runWatch(watch, p);
   },
 
   async vaQc(ctx, args): Promise<QcResult> {

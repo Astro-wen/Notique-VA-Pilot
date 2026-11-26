@@ -122,7 +122,7 @@ export const SOURCE_LABEL: Record<string, string> = {
   note: "Written note",
 };
 
-export const CHANNEL_LABEL: Record<string, string> = { in_app: "In app", text: "Text", email: "Email", call: "Call" };
+export const CHANNEL_LABEL: Record<string, string> = { in_app: "In app", text: "Text", email: "Email", call: "Call", watch: "Watch" };
 
 export const TASK_STATUS_LABEL: Record<string, string> = {
   suggested: "Suggested",

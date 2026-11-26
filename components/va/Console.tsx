@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BarChart3, ClipboardList, DatabaseZap, FolderKanban, Inbox, Settings2 } from "lucide-react";
+import { BarChart3, ClipboardList, DatabaseZap, FolderKanban, Inbox, MessagesSquare, Settings2 } from "lucide-react";
 import { rpc } from "@/lib/client/api";
 import { tzAbbr } from "@/lib/client/format";
 import type { AgentSummary } from "@/lib/types";
@@ -14,9 +14,10 @@ import { Verify } from "./Verify";
 import { ProjectList, ProjectView } from "./Projects";
 import { TasksView } from "./Tasks";
 import { Qc } from "./Qc";
+import { Checkin } from "./Checkin";
 import { AgentPreview } from "./AgentPreview";
 
-export type VaView = "queue" | "event" | "projects" | "project" | "tasks" | "sources" | "qc" | "preview";
+export type VaView = "queue" | "event" | "projects" | "project" | "tasks" | "checkin" | "sources" | "qc" | "preview";
 
 export interface VaNav {
   agent: AgentSummary;
@@ -28,6 +29,7 @@ const NAV: { key: VaView; label: string; icon: React.ReactNode; also?: VaView[] 
   { key: "queue", label: "Queue", icon: <Inbox className="h-4 w-4" />, also: ["event"] },
   { key: "projects", label: "Projects", icon: <FolderKanban className="h-4 w-4" />, also: ["project", "preview"] },
   { key: "tasks", label: "Tickets", icon: <ClipboardList className="h-4 w-4" /> },
+  { key: "checkin", label: "Check-in", icon: <MessagesSquare className="h-4 w-4" /> },
   { key: "sources", label: "Data sources", icon: <DatabaseZap className="h-4 w-4" /> },
   { key: "qc", label: "QC review", icon: <BarChart3 className="h-4 w-4" /> },
 ];
@@ -41,7 +43,7 @@ export function Console() {
   const agents = useMemo(() => me?.agents ?? [], [me]);
   const view = (params.get("view") as VaView) || "queue";
   const [agentId, setAgentId] = useState<string | null>(null);
-  const [counts, setCounts] = useState<{ queue: number; tasks: number } | null>(null);
+  const [counts, setCounts] = useState<{ queue: number; tasks: number; checkin?: number } | null>(null);
 
   useEffect(() => {
     if (agents.length === 0) return;
@@ -60,7 +62,7 @@ export function Console() {
 
   const refreshCounts = useCallback(() => {
     if (!agentId) return;
-    rpc<{ queue: number; tasks: number }>("vaCounts", { agent_id: agentId })
+    rpc<{ queue: number; tasks: number; checkin?: number }>("vaCounts", { agent_id: agentId })
       .then(setCounts)
       .catch(() => {});
   }, [agentId]);
@@ -127,7 +129,7 @@ export function Console() {
           <nav aria-label="Sections" className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-52 shrink-0 flex-col gap-1 border-r border-line bg-white p-3 md:flex">
             {NAV.map((n) => {
               const active = n.key === view || n.also?.includes(view);
-              const count = n.key === "queue" ? counts?.queue : n.key === "tasks" ? counts?.tasks : undefined;
+              const count = n.key === "queue" ? counts?.queue : n.key === "tasks" ? counts?.tasks : n.key === "checkin" ? counts?.checkin : undefined;
               return (
                 <button key={n.key} data-tour={`nav-${n.key}`} onClick={() => go(n.key)} aria-current={active ? "page" : undefined} className={cx("flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm", active ? "bg-accent-soft font-semibold text-[#2f55cc]" : "text-ink-2 hover:bg-page")}>
                   {n.icon}
@@ -170,6 +172,8 @@ export function Console() {
             <AgentPreview nav={nav} projectId={params.get("id") ?? ""} />
           ) : view === "tasks" ? (
             <TasksView nav={nav} />
+          ) : view === "checkin" ? (
+            <Checkin nav={nav} />
           ) : view === "sources" ? (
             <Sources nav={nav} />
           ) : view === "qc" ? (

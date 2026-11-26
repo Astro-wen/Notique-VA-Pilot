@@ -268,6 +268,44 @@ export interface EventDetail {
   canReopen: boolean;
 }
 
+export type WatchStatus = "active" | "met" | "paused" | "closed";
+
+/** A market condition checked once a day for a project. */
+export interface Watch {
+  id: string;
+  project_id: string;
+  agent_id: string;
+  condition: string;
+  note: string | null;
+  status: WatchStatus;
+  last_checked_at: string | null;
+  last_result: { met: boolean; summary: string; sources: { title: string; url: string }[]; error?: string } | null;
+  met_at: string | null;
+  task_id: string | null;
+  created_at: string;
+}
+
+export interface CheckinItem {
+  kind: "suggested" | "waiting" | "unreviewed" | "question";
+  id: string;
+  project_id: string;
+  project_name: string;
+  title: string;
+  /** Whole days this has been waiting on the user. */
+  days: number;
+  task_id: string | null;
+  task_number: number | null;
+}
+
+export interface CheckinResult {
+  items: CheckinItem[];
+  /** Ready to paste into a text or email to the user. */
+  message: string;
+  last: { at: string; by: string; channel: string; count: number } | null;
+  history: { at: string; by: string; channel: string; count: number; note: string | null }[];
+  doneToday: boolean;
+}
+
 export interface ProjectDetail {
   project: Project;
   agent: { id: string; name: string; timezone: string };
@@ -286,6 +324,8 @@ export interface ProjectDetail {
   /** Uploads still being transcribed or read. */
   processingEvents: number;
   lastVerified: { at: string; by: string } | null;
+  /** Null when the watches table has not been created yet. */
+  watches: Watch[] | null;
 }
 
 export interface ProjectListItem extends Project {
