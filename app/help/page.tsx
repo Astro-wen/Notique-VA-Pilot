@@ -17,6 +17,7 @@ const STEPS: Record<HelpRole, { title: string; body: string }[]> = {
   va: [
     { title: "Check who you are serving", body: "The name at the top right is the user whose work you see. Switch there when you work for someone else." },
     { title: "Verify the queue", body: "Open Queue and click Verify on the top row. Decide on every AI draft: Approve, Edit, Decline, or Ask user. Tick the four checks, then Submit. Due 9:00 AM the next business day in the user's time zone." },
+    { title: "Mark what was settled", body: "Before you submit, check the list under the drafts: earlier open questions, concerns and next steps for this client. Tick the ones this conversation answered so the user's deal profile stays current." },
     { title: "Work the tickets", body: "Open Tickets. Set an ETA on anything marked Received. Finish the AI first draft, save it to Deliverables, then Mark delivered. The user calls tickets requests." },
     { title: "Check in once a day", body: "Open Check-in, edit the ready message, send it to the user, and mark it done. When the user says yes to something, press the button on that item so it becomes a ticket." },
     { title: "Watch the market for a client", body: "On a project, open Watches and write a condition such as a mortgage rate or a listing price. Notique checks it every day and opens a ticket when it becomes true." },

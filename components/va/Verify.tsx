@@ -66,7 +66,7 @@ function SettlesPanel({ items, settles, readOnly, onChange }: { items: NonNullab
   });
   const sorted = [...items].sort((a, b) => (order.indexOf(a.id) + 1 || 999) - (order.indexOf(b.id) + 1 || 999));
   return (
-    <section className="mt-5 rounded-xl border border-line bg-white">
+    <section data-tour="settles" className="mt-5 rounded-xl border border-line bg-white">
       <button className="flex w-full items-center gap-2 px-4 py-3 text-left" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         <span className="flex-1">
           <span className="block text-[13px] font-semibold">Does this conversation settle anything from before?</span>

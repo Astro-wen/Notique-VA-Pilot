@@ -286,9 +286,10 @@ export const TOURS = {
   ],
   vaVerify: [
     { title: "Checking a conversation", body: "The transcript is on the left, the AI's drafts are on the right. Your job: decide on every draft, then submit." },
-    { target: "fact", title: "One draft at a time", body: "Read the quote under it. Approve if it matches. Edit to fix the wording or move it to another section. Decline if the AI got it wrong. Ask user if the transcript does not settle it. Keys A, E, D, I do the same. Some drafts carry a suggested request: approving sends that suggestion to the user." },
+    { target: "fact", title: "One draft at a time", body: "Read the quote under it. Approve if it matches. Edit to fix the wording or move it to another section. Decline if the AI got it wrong. Ask user if the transcript does not settle it. Keys A, E, D, I do the same. Some drafts carry a suggested request: approving sends that suggestion to the user. No Approve button means the AI was unsure or the wording describes a person instead of the property: use Edit and approve." },
     { target: "transcript", title: "Click a quote to jump here", body: "The matching line flashes in the transcript. With a recording, the audio jumps to that moment." },
     { target: "add-fact", title: "The AI missed something?", body: "Tick the transcript lines that prove it, then add the fact yourself." },
+    { target: "settles", title: "Did this settle anything from before?", body: "Below the drafts is the client's list of earlier open questions, concerns and next steps. Tick the ones this conversation answered. The AI pre-ticks its guesses. On submit they disappear from the user's deal profile." },
     { target: "checks", title: "Four checks before you submit", body: "Tick each one only after you have checked it yourself. No consent, the wrong client, or audio you cannot follow: use Escalate at the bottom instead of submitting." },
     { target: "submit", title: "Submit", body: "Unlocks when every draft has a decision and all four checks are ticked. The user sees the approved facts and the summary right away. You can reopen for 24 hours." },
   ],
