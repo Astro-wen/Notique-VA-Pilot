@@ -185,15 +185,54 @@ export function isTyping(target: EventTarget | null = typeof document === "undef
   return ["TEXTAREA", "SELECT"].includes(el.tagName) || el.isContentEditable;
 }
 
+/* Phone Back button guard. A dialog with typed text gets its own history entry, so Back asks before
+   throwing the text away instead of leaving the page. Only the top dialog answers. */
+const backGuards: { id: number; onBack: () => void }[] = [];
+let guardSeq = 0;
+function handlePopState() {
+  const top = backGuards[backGuards.length - 1];
+  if (top) top.onBack();
+}
+function handleBeforeUnload(e: BeforeUnloadEvent) {
+  if (backGuards.length === 0) return;
+  e.preventDefault();
+  e.returnValue = "";
+}
+
 export function Modal({ open, onClose, title, children, footer, wide }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode; footer?: React.ReactNode; wide?: boolean }) {
   const titleId = useId();
   const ref = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   const dirty = useRef(false);
+  const guardId = useRef(0);
+  const [askDiscard, setAskDiscard] = useState(false);
+  const markDirty = (e: React.FormEvent) => {
+    // Typing in a dialog opened on top of this one belongs to that dialog.
+    if ((e.target as HTMLElement).closest("[data-modal]") !== ref.current?.closest("[data-modal]")) return;
+    if (dirty.current) return;
+    dirty.current = true;
+    if (typeof window === "undefined" || guardId.current) return;
+    const id = ++guardSeq;
+    guardId.current = id;
+    window.history.pushState({ ...(window.history.state ?? {}), notiqueModal: id }, "", window.location.href);
+    if (backGuards.length === 0) {
+      window.addEventListener("popstate", handlePopState);
+      window.addEventListener("beforeunload", handleBeforeUnload);
+    }
+    backGuards.push({
+      id,
+      onBack: () => {
+        // Back already left the dialog's entry. Put it back and ask, so nothing typed is lost by accident.
+        window.history.pushState({ ...(window.history.state ?? {}), notiqueModal: id }, "", window.location.href);
+        setAskDiscard(true);
+      },
+    });
+  };
   useEffect(() => {
     if (!open) return;
     dirty.current = false;
+    setAskDiscard(false);
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       // Escape while an input method is composing (Chinese, Japanese, Korean) cancels the candidate, not the dialog.
@@ -214,12 +253,29 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
     return () => {
       window.removeEventListener("keydown", onKey, true);
       previous?.focus?.();
+      const id = guardId.current;
+      if (id) {
+        guardId.current = 0;
+        const at = backGuards.findIndex((g) => g.id === id);
+        if (at >= 0) backGuards.splice(at, 1);
+        if (backGuards.length === 0) {
+          window.removeEventListener("popstate", handlePopState);
+          window.removeEventListener("beforeunload", handleBeforeUnload);
+        }
+        // Leave the extra entry in place but unmark it. Going back here could undo a navigation the
+        // dialog's own Save just started, which is worse than one extra Back press later.
+        if (window.history.state?.notiqueModal === id) {
+          const rest = { ...window.history.state };
+          delete rest.notiqueModal;
+          window.history.replaceState(rest, "", window.location.href);
+        }
+      }
     };
   }, [open]);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" data-modal onMouseDown={(e) => e.target === e.currentTarget && !dirty.current && onClose()}>
-      <div ref={ref} tabIndex={-1} onInput={() => (dirty.current = true)} role="dialog" aria-modal="true" aria-labelledby={titleId} className={cx("rise flex max-h-[92vh] w-full flex-col rounded-t-2xl bg-white shadow-xl outline-none sm:rounded-xl", wide ? "sm:max-w-2xl" : "sm:max-w-md")}>
+      <div ref={ref} tabIndex={-1} onInput={markDirty} role="dialog" aria-modal="true" aria-labelledby={titleId} className={cx("rise flex max-h-[92vh] w-full flex-col rounded-t-2xl bg-white shadow-xl outline-none sm:rounded-xl", wide ? "sm:max-w-2xl" : "sm:max-w-md")}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
           <h2 id={titleId} className="text-base font-semibold">
             {title}
@@ -228,6 +284,23 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
             <X className="h-4 w-4" />
           </IconButton>
         </div>
+        {askDiscard ? (
+          <div className="flex flex-wrap items-center gap-2 border-b border-line bg-warn-soft px-5 py-2.5 text-[13px] text-warn">
+            <span className="flex-1">Leave without saving? What you typed here will be lost.</span>
+            <button className="font-semibold underline underline-offset-2" onClick={() => setAskDiscard(false)}>
+              Keep editing
+            </button>
+            <button
+              className="font-semibold underline underline-offset-2"
+              onClick={() => {
+                setAskDiscard(false);
+                onClose();
+              }}
+            >
+              Discard
+            </button>
+          </div>
+        ) : null}
         <div className="overflow-y-auto px-5 py-4">{children}</div>
         {footer ? <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">{footer}</div> : null}
       </div>
