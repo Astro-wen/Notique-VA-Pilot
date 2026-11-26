@@ -462,6 +462,17 @@ Rules:
 4. Never include names of private people in searches.
 Return only JSON: {"met": true or false, "summary": "...", "sources": [{"title": "...", "url": "https://..."}]}`;
 
+/** Number of web searches the provider reports for this request. Native search and OpenRouter's own tool report it under different keys. */
+function searchCount(usage: unknown, depth = 0): number {
+  if (!usage || typeof usage !== "object" || depth > 3) return 0;
+  let n = 0;
+  for (const [key, value] of Object.entries(usage as Record<string, unknown>)) {
+    if (typeof value === "number" && /^(web_search_requests|tool_calls_requested|web_search_count)$/.test(key)) n += value;
+    else if (value && typeof value === "object") n += searchCount(value, depth + 1);
+  }
+  return n;
+}
+
 /** Asks a model with live web search whether the condition holds right now. */
 export async function checkCondition(condition: string): Promise<WatchResult> {
   const key = process.env.OPENROUTER_API_KEY;
@@ -508,8 +519,9 @@ export async function checkCondition(condition: string): Promise<WatchResult> {
     };
     // Prefer the citations the search engine attached over links the model typed out.
     for (const a of Array.isArray(message?.annotations) ? message.annotations : []) push(a?.url_citation?.title, a?.url_citation?.url);
-    // Citations attached by the search engine prove a search really ran. Links the model typed on its own do not.
-    const searched = sources.length > 0;
+    // Proof that a search really ran: citations attached by the engine, or the search count in the usage report.
+    // Links the model typed on its own do not count.
+    const searched = sources.length > 0 || searchCount(body?.usage) > 0;
     if (!searched && extra !== variants[variants.length - 1]) {
       lastError = "The model answered without searching.";
       continue;
