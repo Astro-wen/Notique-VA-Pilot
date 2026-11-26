@@ -57,11 +57,13 @@ export function NewTicketDialog({ open, onClose, projectId, onCreated }: { open:
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={busy ? () => {} : onClose}
       title="New ticket for the user"
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
           <Button variant="primary" busy={busy} onClick={save}>
             Create ticket
           </Button>
@@ -74,7 +76,7 @@ export function NewTicketDialog({ open, onClose, projectId, onCreated }: { open:
           <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} placeholder="Shortlist 3 bed homes near Lincoln Elementary" />
         </Field>
         <Field label="What the user asked for">
-          <Textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
+          <Textarea rows={3} maxLength={2000} value={description} onChange={(e) => setDescription(e.target.value)} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Category">
@@ -127,8 +129,15 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
   const now = useNow(!!task?.timer_started_at);
   const tz = nav.agent.timezone;
 
+  const etaDirty = useRef(false);
   useEffect(() => {
-    setEta(task?.eta ? toLocalInput(task.eta) : "");
+    etaDirty.current = false;
+  }, [task?.id]);
+  useEffect(() => {
+    // A background refresh must not replace a time the VA is in the middle of entering.
+    if (task?.eta && toLocalInput(task.eta) === eta) etaDirty.current = false;
+    if (!etaDirty.current) setEta(task?.eta ? toLocalInput(task.eta) : "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task?.id, task?.eta]);
 
   if (error && !data) return <ErrorNote message={error} onRetry={() => reload()} />;
@@ -171,8 +180,8 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
             </Button>
           ) : null}
         </div>
-        <h2 className="mt-2 text-lg font-semibold">{task.title}</h2>
-        <p className="mt-1 whitespace-pre-wrap text-sm text-ink-2">{task.description}</p>
+        <h2 className="mt-2 break-words text-lg font-semibold [overflow-wrap:anywhere]">{task.title}</h2>
+        <p className="mt-1 whitespace-pre-wrap break-words text-sm text-ink-2 [overflow-wrap:anywhere]">{task.description}</p>
         {task.origin_event_title ? <p className="mt-1 text-xs text-ink-3">Came out of: {task.origin_event_title}</p> : null}
       </div>
 
@@ -204,7 +213,10 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
           </Field>
           <Field label={`ETA (${tzAbbr(Intl.DateTimeFormat().resolvedOptions().timeZone)}, your time)`} hint={task.eta ? `User sees ${dateTime(task.eta, tz, true)}${etaLeft ? `, ${etaLeft.text.toLowerCase()}` : ""}` : "Set this first. The user sees it right away."}>
             <div className="flex gap-2" data-tour="ticket-eta">
-              <Input className="min-w-0" type="datetime-local" value={eta} min={toLocalInput(null)} onChange={(e) => setEta(e.target.value)} />
+              <Input className="min-w-0" type="datetime-local" value={eta} min={toLocalInput(null)} onChange={(e) => {
+                etaDirty.current = true;
+                setEta(e.target.value);
+              }} />
               <Button className="!h-9 shrink-0" variant={task.eta ? "outline" : "primary"} disabled={!eta || (!!task.eta && toLocalInput(task.eta) === eta)} busy={busy === "eta"} onClick={() => run("eta", "setTaskEta", { eta: new Date(eta).toISOString() }, "ETA saved.")}>
                 {task.eta ? "Update" : "Set"}
               </Button>
@@ -254,6 +266,7 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
         <h3 className={label}>Files from the user</h3>
         <div className="mt-2 space-y-2">
           {attachments.length === 0 ? <p className="text-[13px] text-ink-3">None attached.</p> : attachments.map((f) => <FileItem key={f.id} file={f} />)}
+          {!["delivered", "cancelled", "dismissed"].includes(task.status) ? <AddFile projectId={task.project_id} taskId={task.id} kind="attachment" label="Attach proof or a file" onAdded={() => reload(true)} /> : null}
         </div>
       </div>
 

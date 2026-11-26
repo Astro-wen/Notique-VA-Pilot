@@ -62,7 +62,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, [refresh]);
 
   const signOut = useCallback(async () => {
-    await supabase().auth.signOut();
+    // Local scope clears this browser's session even when the network request fails.
+    await supabase().auth.signOut({ scope: "local" }).catch(() => {});
     setMe(null);
     setStatus("anon");
   }, []);

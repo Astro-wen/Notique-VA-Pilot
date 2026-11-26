@@ -76,7 +76,7 @@ function AgentApp() {
   const toast = useToast();
   const { me } = useSession();
   const projectId = params.get("project");
-  const { data, error, loading, reload } = useLoad(() => rpc<ProjectListItem[]>("listProjects"), []);
+  const { data, error, loading, reload } = useLoad(() => rpc<ProjectListItem[]>("listProjects"), [], { refreshMs: 30000 });
   const [create, setCreate] = useState(false);
   const [add, setAdd] = useState(false);
   const [task, setTask] = useState(false);

@@ -69,6 +69,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
   const [summaryDraft, setSummaryDraft] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const unsent = useRef(0);
+  const saving = useRef<Record<string, Promise<boolean>>>({});
   const audioRef = useRef<HTMLAudioElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -153,22 +154,30 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
     }
   }
 
-  async function decide(fact: Fact, verdict: Verdict, extra: Record<string, unknown> = {}) {
-    if (readOnly) return;
+  async function decide(fact: Fact, verdict: Verdict, extra: Record<string, unknown> = {}): Promise<boolean> {
+    if (readOnly) return false;
     if (verdict === "approved" && fact.origin === "ai" && fact.confidence !== null && fact.confidence < 0.6) {
       toast("Low confidence. Edit the wording to confirm it, decline it, or mark it as needing user input.", { tone: "error" });
-      return;
+      return false;
     }
     const before = fact;
     patchFact({ ...fact, verdict, ...(verdict === "edited" && typeof extra.statement === "string" ? { statement: extra.statement } : {}) });
-    try {
-      const saved = await rpc<Fact>("setVerdict", { fact_id: fact.id, verdict, ...extra });
-      patchFact(saved);
-      if (verdict !== "pending") focusNextPending(fact.id);
-    } catch (err) {
-      patchFact(before);
-      toast((err as Error).message, { tone: "error" });
-    }
+    // Saves for one fact go out one at a time, so a slow earlier save can never land on top of a later decision.
+    const prior = saving.current[fact.id] ?? Promise.resolve();
+    const mine = prior.then(async () => {
+      try {
+        const saved = await rpc<Fact>("setVerdict", { fact_id: fact.id, verdict, ...extra });
+        patchFact(saved);
+        if (verdict !== "pending") focusNextPending(fact.id);
+        return true;
+      } catch (err) {
+        patchFact(before);
+        toast((err as Error).message, { tone: "error" });
+        return false;
+      }
+    });
+    saving.current[fact.id] = mine;
+    return mine;
   }
 
   function startEdit(fact: Fact) {
@@ -184,14 +193,20 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
     const canTask = draft.section === "questions" || draft.section === "next_steps";
     if (canTask && draft.withTask && !draft.task.title.trim()) return toast("Give the suggested task a title, or untick it.", { tone: "error" });
     const unchanged = draft.statement.trim() === (fact.ai_statement ?? fact.statement).trim();
+    const kept = draft;
     setEditId(null);
-    await decide(fact, unchanged && fact.origin === "ai" && (fact.confidence ?? 1) >= 0.6 ? "approved" : "edited", {
+    const ok = await decide(fact, unchanged && fact.origin === "ai" && (fact.confidence ?? 1) >= 0.6 ? "approved" : "edited", {
       ...(draft.section !== fact.section ? { section: draft.section } : {}),
       statement: draft.statement.trim(),
       follow_up_date: draft.follow_up_date || null,
       follow_up_condition: draft.follow_up_condition || null,
       suggested_task: canTask && draft.withTask ? draft.task : null,
     });
+    // A failed save reopens the editor with what was typed, instead of throwing it away.
+    if (!ok) {
+      setEditId(fact.id);
+      setDraft(kept);
+    }
   }
 
   function jump(lineId: string, startMs: number | null) {
@@ -205,8 +220,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
 
   async function setCheck(key: keyof EventChecks, value: boolean) {
     if (!detail || readOnly) return;
-    const next = { ...checks, [key]: value };
-    setDetail({ ...detail, event: { ...detail.event, checks: next } });
+    setDetail((d) => (d ? { ...d, event: { ...d.event, checks: { ...(d.event.checks ?? {}), [key]: value } } } : d));
     try {
       await rpc("updateEventMeta", { event_id: eventId, checks: { [key]: value } });
     } catch (err) {
@@ -218,13 +232,16 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
   async function saveSummary() {
     if (!detail || summaryDraft === null) return;
     const next = summaryDraft.trim();
-    setDetail({ ...detail, event: { ...detail.event, summary: next || null } });
+    const before = detail.event.summary;
+    setDetail((d) => (d ? { ...d, event: { ...d.event, summary: next || null } } : d));
     setSummaryDraft(null);
     try {
       await rpc("updateEventMeta", { event_id: eventId, summary: next });
     } catch (err) {
       toast((err as Error).message, { tone: "error" });
-      load();
+      // Keep what was typed so it can be saved again.
+      setDetail((d) => (d ? { ...d, event: { ...d.event, summary: before } } : d));
+      setSummaryDraft(next);
     }
   }
 
@@ -249,7 +266,8 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
     setBusy(true);
     try {
       const fact = await rpc<Fact>("addFact", { event_id: eventId, section: adding.section, statement: adding.statement, line_ids: selected });
-      setDetail({ ...detail, facts: [...detail.facts, fact] });
+      // Append to the latest state. Other decisions may have been saved while this request was running.
+      setDetail((d) => (d ? { ...d, facts: [...d.facts, fact] } : d));
       setAdding(null);
       setSelected([]);
       setFocusId(fact.id);
@@ -274,6 +292,12 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
   async function submit() {
     setBusy(true);
     try {
+      // Count the review time up to this moment. After submission the server no longer accepts it.
+      const ms = unsent.current;
+      if (ms >= 1000) {
+        unsent.current = 0;
+        await rpc("updateEventMeta", { event_id: eventId, add_ms: ms }).catch(() => {});
+      }
       const res = await rpc<{ suggested_tasks: number; accepted: number }>("submitEvent", { event_id: eventId });
       toast(`Submitted. ${res.accepted} ${res.accepted === 1 ? "fact" : "facts"} published${res.suggested_tasks ? `, ${res.suggested_tasks} ${res.suggested_tasks === 1 ? "task" : "tasks"} suggested to the user` : ""}.`);
       nav.refreshCounts();
@@ -319,6 +343,8 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || composing(e)) return;
       if (document.querySelector("[data-modal]")) return;
+      // A held key must not decide several facts in a row.
+      if (e.repeat && !isTyping(e.target)) return;
       if (isTyping(e.target)) {
         if (e.key === "Escape") (e.target as HTMLElement).blur();
         return;
@@ -448,7 +474,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
       </div>
 
       {/* Body */}
-      <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,2fr)_minmax(0,3fr)] lg:grid-cols-2 lg:grid-rows-1">
+      <div className="grid min-h-0 flex-1 grid-rows-[minmax(220px,2fr)_minmax(260px,3fr)] overflow-y-auto lg:grid-cols-2 lg:grid-rows-1 lg:overflow-visible">
         {/* Transcript */}
         <section aria-label="Transcript" className="flex min-h-0 flex-col border-b border-line bg-white lg:border-b-0 lg:border-r">
           <div className="space-y-2 border-b border-line px-4 py-2.5">
@@ -473,7 +499,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                       onBlur={(e) => renameSpeaker(raw, e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !composing(e)) (e.target as HTMLInputElement).blur();
-                        if (e.key === "Escape") setRenaming(null);
+                        if (e.key === "Escape" && !composing(e)) setRenaming(null);
                       }}
                     />
                   ) : (
@@ -593,7 +619,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
               </div>
               {summaryDraft !== null ? (
                 <div className="mt-1.5 space-y-2">
-                  <Textarea autoFocus rows={3} aria-label="Summary" value={summaryDraft} onChange={(e) => setSummaryDraft(e.target.value)} />
+                  <Textarea autoFocus rows={3} maxLength={800} aria-label="Summary" value={summaryDraft} onChange={(e) => setSummaryDraft(e.target.value)} />
                   <div className="flex justify-end gap-2">
                     <Button size="sm" onClick={() => setSummaryDraft(null)}>
                       Cancel
@@ -628,7 +654,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                       const focused = f.id === focusId;
                       const conf = f.origin === "ai" ? confidenceLabel(f.confidence) : null;
                       const editing = editId === f.id && draft;
-                      const canTask = f.section === "questions" || f.section === "next_steps";
+                      const canTask = (editing && draft ? draft.section : f.section) === "questions" || (editing && draft ? draft.section : f.section) === "next_steps";
                       const done = f.verdict !== "pending";
                       return (
                         <div
@@ -786,6 +812,10 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                 className={!checksDone && pending === 0 ? "opacity-60" : undefined}
                 title={pending > 0 ? "Decide every item first" : !checksDone ? "Tick the four checks at the top of the page first" : undefined}
                 onClick={() => {
+                  if (editId || summaryDraft !== null || adding) {
+                    toast("You have an edit open. Save or cancel it before you submit.", { tone: "error" });
+                    return;
+                  }
                   if (!checksDone) {
                     setNudge(true);
                     window.setTimeout(() => setNudge(false), 2200);
@@ -817,7 +847,14 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
           </>
         }
       >
-        <p className="text-sm text-ink-2">{nav.agent.name} will see the approved facts on {detail.project.client_name} right away.</p>
+        <p className="text-sm text-ink-2">The user will see the approved facts on {detail.project.client_name} right away.</p>
+        {event.summary ? (
+          <div className="mt-3 rounded-lg bg-page px-3 py-2 text-[13px] text-ink-2">
+            <div className="font-medium text-ink">Timeline summary the user will see</div>
+            <p className="mt-0.5">{event.summary}</p>
+            <p className="mt-1 text-xs text-ink-3">It is published as is. If it mentions something you declined, go back and edit it.</p>
+          </div>
+        ) : null}
         <dl className="mt-4 divide-y divide-line rounded-lg border border-line text-sm">
           {[
             ["Published as written", counts.approved],

@@ -14,6 +14,7 @@ export function Watches({ projectId, watches, tz, onChanged, onOpenTicket }: { p
   const [condition, setCondition] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
 
   if (watches == null) {
     return (
@@ -25,7 +26,8 @@ export function Watches({ projectId, watches, tz, onChanged, onOpenTicket }: { p
 
   async function add() {
     if (condition.trim().length < 8) return toast("Describe what to watch for, with a number or a place.", { tone: "error" });
-    setBusy("add");
+    if (adding) return;
+    setAdding(true);
     try {
       await rpc("createWatch", { project_id: projectId, condition, note });
       setCondition("");
@@ -35,7 +37,7 @@ export function Watches({ projectId, watches, tz, onChanged, onOpenTicket }: { p
     } catch (err) {
       toast((err as Error).message, { tone: "error" });
     } finally {
-      setBusy(null);
+      setAdding(false);
     }
   }
 
@@ -86,6 +88,27 @@ export function Watches({ projectId, watches, tz, onChanged, onOpenTicket }: { p
                 ))}
               </ul>
             ) : null}
+            {w.status === "met" && w.last_result?.draft ? (
+              <div className="mt-3 rounded-lg border border-line px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-ink-3">Draft note to the client</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      navigator.clipboard.writeText(w.last_result?.draft ?? "").then(
+                        () => toast("Copied."),
+                        () => toast("Could not copy. Select the text and copy it by hand.", { tone: "error" }),
+                      )
+                    }
+                  >
+                    Copy
+                  </Button>
+                </div>
+                <p className="mt-1 whitespace-pre-wrap text-[13px] text-ink-2">{w.last_result.draft}</p>
+                <p className="mt-1.5 text-xs text-ink-3">Written by AI and not reviewed. The user cannot see it. Check it against the sources, then deliver your version on the ticket.</p>
+              </div>
+            ) : null}
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {w.status === "active" ? (
                 <Button size="sm" icon={<RefreshCw className="h-3.5 w-3.5" />} busy={busy === w.id + "checkWatch"} onClick={() => run(w, "checkWatch")}>
@@ -131,7 +154,7 @@ export function Watches({ projectId, watches, tz, onChanged, onOpenTicket }: { p
           <Field label="Why it matters for this client" hint="Optional. Used when the follow-up is drafted.">
             <Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="They paused the search until rates drop" />
           </Field>
-          <Button variant="primary" busy={busy === "add"} onClick={add}>
+          <Button variant="primary" busy={adding} onClick={add}>
             Start watching
           </Button>
         </div>

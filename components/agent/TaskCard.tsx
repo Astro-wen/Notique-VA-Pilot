@@ -80,7 +80,7 @@ export function TaskFormDialog({ open, onClose, projectId, task, onSaved, projec
           <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} placeholder="Draft a follow-up email after Saturday's showing" />
         </Field>
         <Field label="Details" hint="Your assistant researches and drafts. You review and send. They never contact your clients.">
-          <Textarea rows={4} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What it should cover, tone, anything to avoid" />
+          <Textarea rows={4} maxLength={2000} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What it should cover, tone, anything to avoid" />
         </Field>
         <Field label="Type">
           <Select value={category} onChange={(e) => setCategory(e.target.value)}>
@@ -108,14 +108,15 @@ export function TaskCard({ taskId, vaName, tz, preview, onClose, onChanged }: { 
     try {
       await rpc(fn, { task_id: taskId, ...args });
       if (done) toast(done);
+      // Close the small dialogs only once the action went through, so a typed note survives a failed save.
+      setConfirmCancel(false);
+      setRevision(null);
       await reload(true);
       onChanged();
     } catch (err) {
       toast((err as Error).message, { tone: "error" });
     } finally {
       setBusy(null);
-      setConfirmCancel(false);
-      setRevision(null);
     }
   }
 
@@ -149,7 +150,7 @@ export function TaskCard({ taskId, vaName, tz, preview, onClose, onChanged }: { 
               ) : null}
             </div>
             <h3 className="mt-2 text-lg font-semibold">{task.title}</h3>
-            <p className="mt-1 whitespace-pre-wrap text-sm text-ink-2">{task.description}</p>
+            <p className="mt-1 whitespace-pre-wrap break-words text-sm text-ink-2 [overflow-wrap:anywhere]">{task.description}</p>
             {canEdit || canCancel ? (
               <div className="mt-3 flex gap-2">
                 {canEdit ? (

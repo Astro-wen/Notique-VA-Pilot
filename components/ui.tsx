@@ -209,7 +209,8 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
     const previous = document.activeElement as HTMLElement | null;
     // Focus once when the dialog opens. Never again while the user is typing.
     const first = ref.current?.querySelector<HTMLElement>("input,textarea,select,button[data-autofocus]");
-    first?.focus();
+    // A dialog without fields still takes the focus, so the keyboard cannot act on the page behind it.
+    (first ?? ref.current)?.focus();
     return () => {
       window.removeEventListener("keydown", onKey, true);
       previous?.focus?.();
@@ -218,7 +219,7 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" data-modal onMouseDown={(e) => e.target === e.currentTarget && !dirty.current && onClose()}>
-      <div ref={ref} onInput={() => (dirty.current = true)} role="dialog" aria-modal="true" aria-labelledby={titleId} className={cx("rise flex max-h-[92vh] w-full flex-col rounded-t-2xl bg-white shadow-xl sm:rounded-xl", wide ? "sm:max-w-2xl" : "sm:max-w-md")}>
+      <div ref={ref} tabIndex={-1} onInput={() => (dirty.current = true)} role="dialog" aria-modal="true" aria-labelledby={titleId} className={cx("rise flex max-h-[92vh] w-full flex-col rounded-t-2xl bg-white shadow-xl outline-none sm:rounded-xl", wide ? "sm:max-w-2xl" : "sm:max-w-md")}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
           <h2 id={titleId} className="text-base font-semibold">
             {title}

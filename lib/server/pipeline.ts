@@ -25,7 +25,7 @@ function tsToMs(ts: string): number | null {
 function splitSpeaker(text: string): { speaker: string | null; text: string } {
   const voice = text.match(/^<v\s+([^>]+)>(.*)$/i);
   if (voice) return { speaker: voice[1].trim(), text: voice[2].replace(/<\/v>/gi, "").trim() };
-  const m = text.match(/^([A-Za-zÀ-ɏ一-鿿][^:：\n]{0,40})[:：]\s+(.+)$/);
+  const m = text.match(/^([A-Za-zÀ-ɏ一-鿿][^:：\n]{0,40})(?::\s+|：\s*)(.+)$/);
   if (m && m[1].split(/\s+/).length <= 5) return { speaker: m[1].trim(), text: m[2].trim() };
   return { speaker: null, text: text.trim() };
 }
@@ -508,9 +508,15 @@ export async function checkCondition(condition: string): Promise<WatchResult> {
     };
     // Prefer the citations the search engine attached over links the model typed out.
     for (const a of Array.isArray(message?.annotations) ? message.annotations : []) push(a?.url_citation?.title, a?.url_citation?.url);
+    // Citations attached by the search engine prove a search really ran. Links the model typed on its own do not.
+    const searched = sources.length > 0;
+    if (!searched && extra !== variants[variants.length - 1]) {
+      lastError = "The model answered without searching.";
+      continue;
+    }
     for (const x of Array.isArray(parsed.sources) ? parsed.sources : []) push((x as { title?: unknown })?.title, (x as { url?: unknown })?.url);
-    // Without a source there is nothing for the VA to verify, so it never counts as met.
-    return { met: parsed.met === true && sources.length > 0, summary: parsed.summary.trim().slice(0, 600), sources: sources.slice(0, 5), model: typeof body?.model === "string" ? body.model : model };
+    if (!searched) return { met: false, summary: `Not confirmed by a live search. ${parsed.summary.trim()}`.slice(0, 600), sources: sources.slice(0, 5), model: typeof body?.model === "string" ? body.model : model };
+    return { met: parsed.met === true, summary: parsed.summary.trim().slice(0, 600), sources: sources.slice(0, 5), model: typeof body?.model === "string" ? body.model : model };
   }
   throw new PipelineError(`The check could not run: ${lastError}`);
 }

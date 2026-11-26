@@ -189,6 +189,11 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
               </span>
             </div>
           ) : null}
+          {!preview && data.failedUploads?.length ? (
+            <div className="rounded-xl bg-bad-soft px-3.5 py-2.5 text-[13px] text-bad">
+              We could not read {data.failedUploads.length === 1 ? `"${data.failedUploads[0].title}"` : `${data.failedUploads.length} uploads`}. Your assistant can see it and will retry. If it was the wrong file, add it again.
+            </div>
+          ) : null}
           {data.watches?.length ? (
             <div className="rounded-xl border border-line bg-white p-3.5">
               <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-3">
@@ -201,7 +206,7 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
                       <span>{w.condition}</span>
                       {w.status === "met" ? <Badge tone="ok">Happened {dateOnly(w.met_at, tz)}</Badge> : <span className="text-xs text-ink-3">Checked daily</span>}
                     </div>
-                    {w.status === "met" && w.last_result?.summary ? <p className="mt-0.5 text-[13px] text-ink-3">{w.last_result.summary} A follow-up is being prepared for you under Requests.</p> : null}
+                    {w.status === "met" ? <p className="mt-0.5 text-[13px] text-ink-3">A follow-up is being prepared for you under Requests.</p> : null}
                   </li>
                 ))}
               </ul>

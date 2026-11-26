@@ -32,6 +32,7 @@ export function FileItem({ file, canDelete, onDeleted }: { file: FileRow; canDel
         <div className="truncate text-xs text-ink-3">
           {[file.uploaded_by_name, dateTime(file.created_at), fileSize(file.size)].filter(Boolean).join(", ")}
         </div>
+        {file.note ? <div className="truncate text-xs text-ink-2">{file.note}</div> : null}
       </button>
       {file.kind === "deliverable" && file.status === "draft" ? <Badge tone="warn">Not sent yet</Badge> : null}
       {file.url ? (

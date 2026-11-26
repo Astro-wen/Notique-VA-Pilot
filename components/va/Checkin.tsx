@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, ClipboardCopy, MessagesSquare } from "lucide-react";
 import { rpc } from "@/lib/client/api";
 import { CHANNEL_LABEL, dateTime, taskNo } from "@/lib/client/format";
@@ -24,6 +24,8 @@ export function Checkin({ nav }: { nav: VaNav }) {
   const [busy, setBusy] = useState<string | null>(null);
   const tz = nav.agent.timezone;
   const first = nav.agent.name.split(" ")[0];
+  const current = useRef(nav.agent.id);
+  current.current = nav.agent.id;
 
   // Fill the draft once per user. Later reloads must not overwrite what the VA has edited.
   const suggested = data?.message ?? "";
@@ -50,7 +52,11 @@ export function Checkin({ nav }: { nav: VaNav }) {
   async function markDone() {
     setBusy("done");
     try {
-      setData(await rpc<CheckinResult>("logCheckin", { agent_id: nav.agent.id, channel }));
+      const forUser = nav.agent.id;
+      const next = await rpc<CheckinResult>("logCheckin", { agent_id: forUser, channel });
+      // Ignore the answer if the VA has switched to another user in the meantime.
+      if (current.current !== forUser) return;
+      setData(next);
       nav.refreshCounts();
       toast("Check-in logged for today.");
     } catch (err) {
@@ -65,7 +71,6 @@ export function Checkin({ nav }: { nav: VaNav }) {
     try {
       await rpc(fn, { task_id: item.task_id, requested_via: channel });
       toast(fn === "assignTask" ? "Ticket opened. It is in your Tickets now." : "Removed from the list.");
-      setTouched(false);
       await reload(true);
       nav.refreshCounts();
     } catch (err) {
@@ -74,6 +79,22 @@ export function Checkin({ nav }: { nav: VaNav }) {
       setBusy(null);
     }
   }
+
+  const historyCard = data.history.length ? (
+      <Card className="p-4">
+        <div className="text-xs font-semibold uppercase tracking-wide text-ink-3">Recent check-ins</div>
+        <ul className="mt-2 space-y-1.5 text-[13px] text-ink-2">
+          {data.history.map((h) => (
+            <li key={h.at} className="flex justify-between gap-3">
+              <span>
+                {dateTime(h.at, tz)}, {h.by.split(" ")[0]}, {(CHANNEL_LABEL[h.channel] ?? h.channel).toLowerCase()}
+              </span>
+              <span className="text-ink-3">{h.count} open</span>
+            </li>
+          ))}
+        </ul>
+      </Card>
+  ) : null;
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -86,9 +107,12 @@ export function Checkin({ nav }: { nav: VaNav }) {
       </p>
 
       {data.items.length === 0 ? (
-        <Card className="mt-4">
-          <Empty icon={<MessagesSquare className="h-5 w-5" />} title={`Nothing is waiting on ${first}`} body="Suggested follow-ups, unanswered questions, and deliveries without feedback show up here." />
-        </Card>
+        <>
+          <Card className="mt-4">
+            <Empty icon={<MessagesSquare className="h-5 w-5" />} title={`Nothing is waiting on ${first}`} body="Suggested follow-ups, unanswered questions, and deliveries without feedback show up here." />
+          </Card>
+          <div className="mt-4 max-w-md">{historyCard}</div>
+        </>
       ) : (
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
           <div className="space-y-1.5">
@@ -162,21 +186,7 @@ export function Checkin({ nav }: { nav: VaNav }) {
               </div>
             </Card>
 
-            {data.history.length ? (
-              <Card className="p-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-ink-3">Recent check-ins</div>
-                <ul className="mt-2 space-y-1.5 text-[13px] text-ink-2">
-                  {data.history.map((h) => (
-                    <li key={h.at} className="flex justify-between gap-3">
-                      <span>
-                        {dateTime(h.at, tz)}, {h.by.split(" ")[0]}, {(CHANNEL_LABEL[h.channel] ?? h.channel).toLowerCase()}
-                      </span>
-                      <span className="text-ink-3">{h.count} open</span>
-                    </li>
-                  ))}
-                </ul>
-              </Card>
-            ) : null}
+            {historyCard}
           </div>
         </div>
       )}

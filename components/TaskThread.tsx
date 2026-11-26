@@ -27,11 +27,14 @@ export function TaskThread({ taskId, messages, viewer, otherName, disabled, canA
   const count = messages.length;
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "nearest" });
+    // Scroll the thread itself, never the page or dialog around it.
+    const box = endRef.current?.parentElement;
+    if (box) box.scrollTop = box.scrollHeight;
   }, [count]);
 
   async function send(ask: boolean) {
     if (!body.trim() || busy) return;
+    const sent = body;
     setBusy(true);
     try {
       await rpc("sendTaskMessage", {
@@ -40,7 +43,8 @@ export function TaskThread({ taskId, messages, viewer, otherName, disabled, canA
         ask,
         ...(viewer === "va" && mode === "log" ? { as_agent: true, channel } : {}),
       });
-      setBody("");
+      // Clear only the text that went out. Anything typed while it was sending stays.
+      setBody((cur) => (cur === sent ? "" : cur.startsWith(sent) ? cur.slice(sent.length).trimStart() : cur));
       onSent();
     } catch (err) {
       toast((err as Error).message, { tone: "error" });

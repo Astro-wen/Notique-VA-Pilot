@@ -93,8 +93,52 @@ function str(v: unknown, label: string, max = 500): string {
   return v.trim().slice(0, max);
 }
 
+/** Rejects text over the limit instead of silently cutting the end off. */
+function longText(v: unknown, label: string, max: number): string {
+  if (typeof v !== "string" || !v.trim()) throw new RpcError(`${label} is required.`);
+  if (v.trim().length > max) throw new RpcError(`${label} can be at most ${max} characters. It is ${v.trim().length} now.`);
+  return v.trim();
+}
+
 function optStr(v: unknown, max = 500): string | null {
   return typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null;
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** A record id from the client. Anything that is not a UUID is treated as not found instead of reaching the database. */
+function uid(v: unknown, label: string): string {
+  if (typeof v !== "string" || !UUID.test(v.trim())) throw new RpcError(`${label} not found.`, 404);
+  return v.trim();
+}
+
+/** Passwords are used exactly as typed. Trimming would make the saved password differ from what the admin entered. */
+function password(v: unknown, label: string): string {
+  if (typeof v !== "string" || v.length < 8) throw new RpcError(`${label} must be at least 8 characters.`);
+  if (v.length > 200) throw new RpcError(`${label} is too long.`);
+  return v;
+}
+
+function timezone(v: unknown): string {
+  const tz = typeof v === "string" ? v.trim() : "";
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    if (tz) return tz;
+  } catch {
+    /* fall through */
+  }
+  throw new RpcError("Choose a valid time zone, for example America/Los_Angeles.");
+}
+
+/** Storage keys are issued by createUpload. Only that exact shape is accepted, so a key can never point outside its project. */
+function ownKey(path: string, prefix: string): boolean {
+  return path.startsWith(prefix) && /^[A-Za-z0-9._/-]+$/.test(path) && !path.includes("..") && !path.includes("//") && path.slice(prefix.length).indexOf("/") === -1;
+}
+
+/** Long enough to mean something. Chinese, Japanese and Korean say more per character. */
+function enoughText(text: string): boolean {
+  const t = text.trim();
+  return t.length >= 20 || (/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/.test(t) && t.length >= 6);
 }
 
 async function assertAgentAccess(p: Profile, agentId: string): Promise<void> {
@@ -108,7 +152,7 @@ async function assertAgentAccess(p: Profile, agentId: string): Promise<void> {
 }
 
 async function loadProject(p: Profile, projectId: unknown): Promise<Project> {
-  const id = str(projectId, "Project");
+  const id = uid(projectId, "Project");
   const row = q(await db().from("projects").select("*").eq("id", id).maybeSingle()) as Project | null;
   if (!row) throw new RpcError("Project not found.", 404);
   await assertAgentAccess(p, row.agent_id);
@@ -116,7 +160,7 @@ async function loadProject(p: Profile, projectId: unknown): Promise<Project> {
 }
 
 async function loadEvent(p: Profile, eventId: unknown): Promise<EventRow & { raw_text: string | null; stt_id: string | null; source_path: string | null }> {
-  const id = str(eventId, "Event");
+  const id = uid(eventId, "Event");
   const row = q(await db().from("events").select("*").eq("id", id).maybeSingle()) as any;
   if (!row) throw new RpcError("Event not found.", 404);
   await assertAgentAccess(p, row.agent_id);
@@ -124,7 +168,7 @@ async function loadEvent(p: Profile, eventId: unknown): Promise<EventRow & { raw
 }
 
 async function loadTask(p: Profile, taskId: unknown): Promise<Task> {
-  const id = str(taskId, "Task");
+  const id = uid(taskId, "Task");
   const row = q(await db().from("tasks").select("*").eq("id", id).maybeSingle()) as Task | null;
   if (!row) throw new RpcError("Task not found.", 404);
   await assertAgentAccess(p, row.agent_id);
@@ -180,7 +224,8 @@ async function setEventStatus(id: string, status: string, extra: Record<string, 
 
 async function failEvent(id: string, err: unknown) {
   const message = err instanceof PipelineError || err instanceof RpcError ? err.message : `Processing failed: ${(err as Error)?.message ?? "unknown error"}`;
-  await setEventStatus(id, "failed", { error: message.slice(0, 500) });
+  // Only work that is still in flight can fail. A late error from a second worker must not undo a finished event.
+  q(await db().from("events").update({ status: "failed", status_changed_at: new Date().toISOString(), error: message.slice(0, 500) }).eq("id", id).in("status", ["processing", "extracting"]).select("id"));
 }
 
 async function insertLines(eventId: string, lines: RawLine[]) {
@@ -460,7 +505,8 @@ async function projectWatches(projectId: string, forAgent: boolean): Promise<Wat
   if (res.error) return null;
   const rows = (res.data ?? []) as Watch[];
   // Users see what is being watched and whether it happened, not the working notes.
-  return forAgent ? rows.filter((w) => w.status !== "paused").map((w) => ({ ...w, note: null, last_result: w.last_result ? { met: w.last_result.met, summary: w.status === "met" ? w.last_result.summary : "", sources: w.status === "met" ? w.last_result.sources : [] } : null })) : rows;
+  // Users see what is being watched and whether it happened. The finding, sources, notes and draft are unreviewed and stay with the VA.
+  return forAgent ? rows.filter((w) => w.status !== "paused").map((w) => ({ ...w, note: null, last_result: null })) : rows;
 }
 
 function watchesMissing(): RpcError {
@@ -480,46 +526,46 @@ async function runWatch(watch: Watch, actor: Profile | null): Promise<Watch> {
   } catch (err) {
     const message = err instanceof Error ? err.message : "The check could not run.";
     const failed = { met: false, summary: watch.last_result?.summary ?? "", sources: watch.last_result?.sources ?? [], error: message };
-    return q(await db().from("watches").update({ last_checked_at: now, last_result: failed }).eq("id", watch.id).select("*").single()) as Watch;
+    const kept = q(await db().from("watches").update({ last_checked_at: now, last_result: failed }).eq("id", watch.id).eq("status", watch.status).select("*")) as Watch[];
+    return kept[0] ?? watch;
   }
   const patch: Record<string, unknown> = { last_checked_at: now, last_result: result };
   if (result.met && watch.status === "active") {
     // Claim it first so two checks running together cannot open two tickets.
     const claimed = q(await db().from("watches").update({ ...patch, status: "met", met_at: now }).eq("id", watch.id).eq("status", "active").select("*")) as Watch[];
     if (claimed.length === 0) return q(await db().from("watches").select("*").eq("id", watch.id).single()) as Watch;
-    const project = q(await db().from("projects").select("*").eq("id", watch.project_id).single()) as Project;
-    const submitted = q(await db().from("events").select("id").eq("project_id", project.id).eq("status", "submitted")) as { id: string }[];
-    const facts = submitted.length
-      ? (q(await db().from("facts").select("section,statement").eq("project_id", project.id).in("event_id", submitted.map((e) => e.id)).in("verdict", ["approved", "edited"]).is("resolved_at", null).limit(40)) as { section: string; statement: string }[])
-      : [];
-    let draft = "";
     try {
-      draft = await draftFollowUp({ clientName: project.client_name, condition: watch.condition, finding: result.summary, note: watch.note, facts: facts.map((f) => `${f.section}: ${f.statement}`) });
-    } catch {
-      draft = "";
+      const project = q(await db().from("projects").select("*").eq("id", watch.project_id).single()) as Project;
+      const submitted = q(await db().from("events").select("id").eq("project_id", project.id).eq("status", "submitted")) as { id: string }[];
+      const facts = submitted.length
+        ? (q(await db().from("facts").select("section,statement").eq("project_id", project.id).in("event_id", submitted.map((e) => e.id)).in("verdict", ["approved", "edited"]).is("resolved_at", null).limit(40)) as { section: string; statement: string }[])
+        : [];
+      // The draft is a convenience. It must never hold up the ticket, so it gets a short time limit.
+      const draft = await Promise.race([
+        draftFollowUp({ clientName: project.client_name, condition: watch.condition, finding: result.summary, note: watch.note, facts: facts.map((f) => `${f.section}: ${f.statement}`) }).catch(() => ""),
+        new Promise<string>((resolve) => setTimeout(() => resolve(""), 45000)),
+      ]);
+      // The user can read this ticket, so it only says what happened. The unreviewed finding and draft stay on the watch for the VA.
+      const description = `Something your assistant was watching for has happened: ${watch.condition}\n\nThey are checking the details and preparing a follow-up you can send to your client.`.slice(0, 2000);
+      const task = q(
+        await db()
+          .from("tasks")
+          .insert({ project_id: project.id, agent_id: project.agent_id, title: `Follow up: ${watch.condition}`.slice(0, 140), description, category: "Follow-up draft", status: "received", requested_via: "watch", assigned_at: now, created_by: actor?.id ?? null })
+          .select("*")
+          .single(),
+      ) as Task;
+      await systemMessage(task.id, "Opened automatically because a watched condition was met.");
+      await audit(actor, "watch.met", "watch", watch.id, { task_id: task.id });
+      return q(await db().from("watches").update({ task_id: task.id, last_result: { ...result, draft } }).eq("id", watch.id).select("*").single()) as Watch;
+    } catch (err) {
+      // Without a ticket nobody would act on it. Put the watch back so the next check tries again.
+      await db().from("watches").update({ status: "active", met_at: null }).eq("id", watch.id).eq("status", "met").is("task_id", null);
+      throw err;
     }
-    const description = [
-      `Watched condition is now true: ${watch.condition}`,
-      `What we found: ${result.summary}`,
-      result.sources.length ? `Sources: ${result.sources.map((x) => x.url).join(" ")}` : "",
-      watch.note ? `Why it matters: ${watch.note}` : "",
-      draft ? `Draft note to the client, check it against the sources before delivering:\n${draft}` : "Draft a short note the user can send to this client.",
-    ]
-      .filter(Boolean)
-      .join("\n\n")
-      .slice(0, 2000);
-    const task = q(
-      await db()
-        .from("tasks")
-        .insert({ project_id: project.id, agent_id: project.agent_id, title: `Follow up: ${watch.condition}`.slice(0, 140), description, category: "Follow-up draft", status: "received", requested_via: "watch", assigned_at: now, created_by: actor?.id ?? null })
-        .select("*")
-        .single(),
-    ) as Task;
-    await systemMessage(task.id, "Opened automatically because a watched condition was met.");
-    await audit(actor, "watch.met", "watch", watch.id, { task_id: task.id });
-    return q(await db().from("watches").update({ task_id: task.id }).eq("id", watch.id).select("*").single()) as Watch;
   }
-  return q(await db().from("watches").update(patch).eq("id", watch.id).select("*").single()) as Watch;
+  // A slow check must not overwrite the state of a watch that was changed or met in the meantime.
+  const saved = q(await db().from("watches").update(patch).eq("id", watch.id).eq("status", watch.status).select("*")) as Watch[];
+  return saved[0] ?? (q(await db().from("watches").select("*").eq("id", watch.id).single()) as Watch);
 }
 
 /** Daily job: checks every active watch that has not been checked in the last 20 hours. */
@@ -533,6 +579,11 @@ export async function runDueWatches(budgetMs = 240000): Promise<{ checked: numbe
   let met = 0;
   for (const w of rows) {
     if (Date.now() - started > budgetMs) break;
+    // Claim before the paid search, so overlapping runs do not check the same watch twice.
+    let claim = db().from("watches").update({ last_checked_at: new Date().toISOString() }).eq("id", w.id).eq("status", "active");
+    claim = w.last_checked_at ? claim.eq("last_checked_at", w.last_checked_at) : claim.is("last_checked_at", null);
+    const got = await claim.select("id");
+    if (got.error || (got.data ?? []).length === 0) continue;
     const after = await runWatch(w, null).catch(() => null);
     checked += 1;
     if (after?.status === "met") met += 1;
@@ -540,8 +591,30 @@ export async function runDueWatches(budgetMs = 240000): Promise<{ checked: numbe
   return { checked, met, skipped: rows.length - checked };
 }
 
+/** Daily job: moves along uploads that nobody was watching, so a finished transcription is not left waiting for someone to open a page. */
+export async function reconcileEvents(budgetMs = 120000): Promise<{ advanced: number }> {
+  const started = Date.now();
+  const rows = q(await db().from("events").select("*").in("status", ["processing", "extracting"]).order("status_changed_at", { ascending: true }).limit(40)) as any[];
+  let advanced = 0;
+  for (const event of rows) {
+    if (Date.now() - started > budgetMs) break;
+    try {
+      // A recording that has been processing for more than a day is not coming back. Fail it so Retry can pick it up.
+      if (event.status === "processing" && Date.now() - new Date(event.status_changed_at).getTime() > 24 * 3600 * 1000) {
+        await failEvent(event.id, new PipelineError("Transcription did not finish. Press Retry."));
+      } else {
+        await advanceEvent(event);
+      }
+      advanced += 1;
+    } catch (err) {
+      await failEvent(event.id, err).catch(() => {});
+    }
+  }
+  return { advanced };
+}
+
 async function loadWatch(p: Profile, watchId: unknown): Promise<Watch> {
-  const res = await db().from("watches").select("*").eq("id", str(watchId, "Watch")).maybeSingle();
+  const res = await db().from("watches").select("*").eq("id", uid(watchId, "Watch")).maybeSingle();
   if (res.error) throw watchesMissing();
   if (!res.data) throw new RpcError("Watch not found.", 404);
   await assertAgentAccess(p, (res.data as Watch).agent_id);
@@ -559,7 +632,7 @@ async function buildCheckin(p: Profile, agentId: string): Promise<CheckinResult>
   const agent = q(await db().from("profiles").select("name,timezone").eq("id", agentId).single()) as { name: string; timezone: string };
   const projects = q(await db().from("projects").select("id,client_name").eq("agent_id", agentId)) as { id: string; client_name: string }[];
   const pname = (id: string) => projects.find((x) => x.id === id)?.client_name ?? "";
-  const tasks = q(await db().from("tasks").select("*").eq("agent_id", agentId).in("status", ["suggested", "waiting", "delivered"]).order("created_at", { ascending: true }).limit(200)) as Task[];
+  const tasks = q(await db().from("tasks").select("*").eq("agent_id", agentId).in("status", ["suggested", "waiting", "delivered"]).order("created_at", { ascending: false }).limit(400)) as Task[];
   const items: CheckinItem[] = [];
   for (const t of tasks) {
     const base = { id: t.id, project_id: t.project_id, project_name: pname(t.project_id), title: t.title, task_id: t.id, task_number: t.number };
@@ -582,7 +655,15 @@ async function buildCheckin(p: Profile, agentId: string): Promise<CheckinResult>
   const names = await nameMap(logs.map((l) => l.actor_id));
   const history = logs.map((l) => ({ at: l.at, by: (l.actor_id && names[l.actor_id]) || "VA", channel: l.detail?.channel ?? "text", count: l.detail?.count ?? 0, note: l.detail?.note ?? null }));
   const last = history[0] ?? null;
-  const doneToday = !!last && Date.now() - new Date(last.at).getTime() < 18 * 3600 * 1000;
+  // "Today" is the user's calendar day, not a rolling window.
+  const day = (d: Date) => {
+    try {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: agent.timezone }).format(d);
+    } catch {
+      return d.toISOString().slice(0, 10);
+    }
+  };
+  const doneToday = !!last && day(new Date(last.at)) === day(new Date());
 
   const first = (agent.name || "there").split(" ")[0];
   const mine = (p.name || "your assistant").split(" ")[0];
@@ -680,6 +761,7 @@ async function buildProject(project: Project, forAgent: boolean): Promise<Projec
     pendingDue: allEvents.filter((e) => ["processing", "extracting", "ready", "in_review"].includes(e.status) && e.due_at).map((e) => e.due_at as string).sort().pop() ?? null,
     lastVerified,
     watches: await projectWatches(project.id, forAgent),
+    failedUploads: rawEvents.filter((e) => e.status === "failed").map((e) => ({ id: e.id as string, title: e.title as string })),
   };
 }
 
@@ -706,11 +788,10 @@ export const handlers: Record<string, Handler> = {
     if ((existing.count ?? 0) > 0) throw new RpcError("Setup is already complete. Ask an admin to create your account.", 403);
     const email = str(args.email, "Email", 200).toLowerCase();
     const name = str(args.name, "Name", 80);
-    const password = str(args.password, "Password", 200);
-    if (password.length < 8) throw new RpcError("Password must be at least 8 characters.");
-    const created = await db().auth.admin.createUser({ email, password, email_confirm: true });
+    const pw = password(args.password, "Password");
+    const created = await db().auth.admin.createUser({ email, password: pw, email_confirm: true });
     if (created.error || !created.data.user) throw new RpcError(created.error?.message ?? "Could not create the account.");
-    const inserted = await db().from("profiles").insert({ id: created.data.user.id, email, name, role: "admin", timezone: optStr(args.timezone, 60) ?? "America/Los_Angeles" }).select("id");
+    const inserted = await db().from("profiles").insert({ id: created.data.user.id, email, name, role: "admin", timezone: args.timezone ? timezone(args.timezone) : "America/Los_Angeles" }).select("id");
     if (inserted.error) {
       await db().auth.admin.deleteUser(created.data.user.id);
       throw new RpcError(`Database error: ${inserted.error.message}`, 500);
@@ -755,16 +836,15 @@ export const handlers: Record<string, Handler> = {
     const name = str(args.name, "Name", 80);
     const role = str(args.role, "Role", 10);
     if (!["admin", "va", "agent"].includes(role)) throw new RpcError("Role must be Admin, VA, or Agent.");
-    const password = str(args.password, "Temporary password", 200);
-    if (password.length < 8) throw new RpcError("Password must be at least 8 characters.");
-    const created = await db().auth.admin.createUser({ email, password, email_confirm: true });
+    const pw = password(args.password, "Temporary password");
+    const created = await db().auth.admin.createUser({ email, password: pw, email_confirm: true });
     if (created.error || !created.data.user) {
       const msg = created.error?.message ?? "Could not create the account.";
       throw new RpcError(/already/i.test(msg) ? "An account with this email already exists." : msg);
     }
     const insert = await db()
       .from("profiles")
-      .insert({ id: created.data.user.id, email, name, role, company: optStr(args.company, 120), timezone: optStr(args.timezone, 60) ?? "America/Los_Angeles" })
+      .insert({ id: created.data.user.id, email, name, role, company: optStr(args.company, 120), timezone: args.timezone ? timezone(args.timezone) : "America/Los_Angeles" })
       .select("*")
       .single();
     if (insert.error) {
@@ -781,7 +861,7 @@ export const handlers: Record<string, Handler> = {
     const patch: Record<string, unknown> = {};
     if (typeof args.name === "string") patch.name = str(args.name, "Name", 80);
     if ("company" in args) patch.company = optStr(args.company, 120);
-    if (typeof args.timezone === "string") patch.timezone = str(args.timezone, "Time zone", 60);
+    if (typeof args.timezone === "string") patch.timezone = timezone(args.timezone);
     if (typeof args.role === "string") {
       if (!["admin", "va", "agent"].includes(args.role)) throw new RpcError("Role must be Admin, VA, or User.");
       const current = q(await db().from("profiles").select("role").eq("id", id).maybeSingle()) as { role: string } | null;
@@ -790,6 +870,7 @@ export const handlers: Record<string, Handler> = {
         if (id === me(ctx).id) throw new RpcError("You cannot change your own role.");
         if (current.role === "agent") {
           const owned = await db().from("projects").select("id", { count: "exact", head: true }).eq("agent_id", id);
+      if (owned.error) throw new RpcError("Could not check whether this account owns projects. Nothing was deleted. Try again.", 500);
           if ((owned.count ?? 0) > 0) throw new RpcError("This user already has projects, so the role cannot be changed. Create a separate VA account instead.");
         }
         // Old assignments no longer make sense under the new role.
@@ -848,9 +929,8 @@ export const handlers: Record<string, Handler> = {
   async adminResetPassword(ctx, args) {
     const p = admin(ctx);
     const id = str(args.user_id, "User");
-    const password = str(args.password, "New password", 200);
-    if (password.length < 8) throw new RpcError("Password must be at least 8 characters.");
-    const res = await db().auth.admin.updateUserById(id, { password });
+    const pw = password(args.password, "New password");
+    const res = await db().auth.admin.updateUserById(id, { password: pw });
     if (res.error) throw new RpcError(res.error.message);
     await audit(p, "user.reset_password", "profile", id);
     return { ok: true };
@@ -858,8 +938,11 @@ export const handlers: Record<string, Handler> = {
 
   async adminSetAssignment(ctx, args) {
     const p = admin(ctx);
-    const va_id = str(args.va_id, "VA");
-    const agent_id = str(args.agent_id, "Agent");
+    const va_id = uid(args.va_id, "VA");
+    const agent_id = uid(args.agent_id, "User");
+    if (typeof args.on !== "boolean") throw new RpcError("Say whether to add or remove the assignment.");
+    const pair = q(await db().from("profiles").select("id,role").in("id", [va_id, agent_id])) as { id: string; role: string }[];
+    if (pair.find((x) => x.id === va_id)?.role === "agent" || pair.find((x) => x.id === agent_id)?.role !== "agent") throw new RpcError("Assign a VA or admin to a user account.");
     if (args.on) {
       q(await db().from("assignments").upsert({ va_id, agent_id }).select("va_id"));
     } else {
@@ -917,8 +1000,9 @@ export const handlers: Record<string, Handler> = {
   async createUpload(ctx, args) {
     const p = me(ctx);
     const project = await loadProject(p, args.project_id);
-    const name = str(args.name, "File name", 200);
-    const safe = name.replace(/[^A-Za-z0-9._-]+/g, "_").slice(-80) || "file";
+    if (typeof args.name !== "string" || !args.name.trim()) throw new RpcError("File name is required.");
+    // Keep the end of the name, which carries the extension the reader depends on.
+    const safe = args.name.trim().replace(/[^A-Za-z0-9._-]+/g, "_").slice(-80) || "file";
     const path = `${project.agent_id}/${project.id}/${randomUUID()}-${safe}`;
     const res = await db().storage.from(BUCKET).createSignedUploadUrl(path);
     if (res.error || !res.data) throw new RpcError(`Could not prepare the upload: ${res.error?.message ?? "storage is not ready"}`, 500);
@@ -934,8 +1018,17 @@ export const handlers: Record<string, Handler> = {
     const path = optStr(args.path, 400);
     const url = optStr(args.url, 1000);
     if (!path && !url) throw new RpcError("Add a file or a link.");
-    if (path && !path.startsWith(`${project.agent_id}/${project.id}/`)) throw new RpcError("Invalid file path.");
-    if (url && !/^https?:\/\//i.test(url)) throw new RpcError("Links must start with http or https.");
+    if (path && !ownKey(path, `${project.agent_id}/${project.id}/`)) throw new RpcError("Invalid file path.");
+    if (url) {
+      let ok = false;
+      try {
+        const u = new URL(url);
+        ok = (u.protocol === "http:" || u.protocol === "https:") && u.hostname.includes(".");
+      } catch {
+        ok = false;
+      }
+      if (!ok) throw new RpcError("Enter a full link that starts with http or https.");
+    }
     let taskId: string | null = null;
     if (args.task_id) {
       const task = await loadTask(p, args.task_id);
@@ -1016,9 +1109,9 @@ export const handlers: Record<string, Handler> = {
     const imagePaths: string[] = Array.isArray(args.image_paths) ? args.image_paths.filter((x: unknown) => typeof x === "string").slice(0, 8) : [];
     const text = typeof args.text === "string" ? args.text.slice(0, 400000) : "";
     for (const path of [audioPath, filePath, ...imagePaths]) {
-      if (path && !path.startsWith(prefix)) throw new RpcError("Invalid file path.");
+      if (path && !ownKey(path, prefix)) throw new RpcError("Invalid file path.");
     }
-    if (!audioPath && !filePath && imagePaths.length === 0 && text.trim().length < 20) {
+    if (!audioPath && !filePath && imagePaths.length === 0 && !enoughText(text)) {
       throw new RpcError("Add a recording, a file, or at least a few sentences of text.");
     }
     const occurred = optStr(args.occurred_at, 40);
@@ -1099,6 +1192,9 @@ export const handlers: Record<string, Handler> = {
     const p = staff(ctx);
     const event = await loadEvent(p, args.event_id);
     if (event.status !== "failed") throw new RpcError("Only failed events can be retried.");
+    // Claim the retry so two clicks, or two people, cannot process the same upload twice.
+    const claimed = q(await db().from("events").update({ status: "extracting", status_changed_at: new Date().toISOString(), error: null }).eq("id", event.id).eq("status", "failed").select("id")) as any[];
+    if (claimed.length === 0) return stripEvent(q(await db().from("events").select("*").eq("id", event.id).single()));
     try {
       const lines = q(await db().from("transcript_lines").select("id").eq("event_id", event.id).limit(1)) as any[];
       if (lines.length) {
@@ -1449,9 +1545,12 @@ export const handlers: Record<string, Handler> = {
 
   async resolveFact(ctx, args) {
     const p = me(ctx);
-    const fact = q(await db().from("facts").select("*").eq("id", str(args.fact_id, "Fact")).maybeSingle()) as any;
+    const fact = q(await db().from("facts").select("*").eq("id", uid(args.fact_id, "Item")).maybeSingle()) as any;
     if (!fact) throw new RpcError("This item no longer exists.", 404);
     await loadProject(p, fact.project_id);
+    // Only verified open items can be closed, and only from the sections that offer it.
+    const ev = q(await db().from("events").select("status").eq("id", fact.event_id).maybeSingle()) as { status: string } | null;
+    if (ev?.status !== "submitted" || !["approved", "edited"].includes(fact.verdict) || !["questions", "next_steps", "risks"].includes(fact.section)) throw new RpcError("This item cannot be marked resolved.");
     q(await db().from("facts").update({ resolved_at: args.undo ? null : new Date().toISOString() }).eq("id", fact.id).select("id"));
     return { ok: true };
   },
@@ -1485,7 +1584,7 @@ export const handlers: Record<string, Handler> = {
           project_id: project.id,
           agent_id: project.agent_id,
           title: str(args.title, "Title", 140),
-          description: str(args.description, "Description", 2000),
+          description: longText(args.description, "Details", 2000),
           category: optStr(args.category, 40) ?? "Other",
           est_minutes: Number.isFinite(Number(args.est_minutes)) && Number(args.est_minutes) > 0 ? Math.round(Number(args.est_minutes)) : null,
           status: "received",
@@ -1507,7 +1606,7 @@ export const handlers: Record<string, Handler> = {
     if (p.role === "agent" && !["suggested", "received"].includes(task.status)) throw new RpcError("Work has started on this task. Send a message to change the request.");
     const patch: Record<string, unknown> = {};
     if (typeof args.title === "string") patch.title = str(args.title, "Title", 140);
-    if (typeof args.description === "string") patch.description = str(args.description, "Description", 2000);
+    if (typeof args.description === "string") patch.description = longText(args.description, "Details", 2000);
     if (typeof args.category === "string") patch.category = str(args.category, "Category", 40);
     if ("est_minutes" in args) patch.est_minutes = Number.isFinite(Number(args.est_minutes)) && Number(args.est_minutes) > 0 ? Math.round(Number(args.est_minutes)) : null;
     const row = q(await db().from("tasks").update(patch).eq("id", task.id).select("*").single()) as Task;
@@ -1535,7 +1634,7 @@ export const handlers: Record<string, Handler> = {
       return { ok: true };
     }
     if (task.status !== "suggested") throw new RpcError("Only suggestions can be dismissed.");
-    q(await db().from("tasks").update({ status: "dismissed" }).eq("id", task.id).select("id"));
+    q(await db().from("tasks").update({ status: "dismissed" }).eq("id", task.id).eq("status", "suggested").select("id"));
     return { ok: true };
   },
 
@@ -1557,7 +1656,9 @@ export const handlers: Record<string, Handler> = {
     if (Number.isNaN(Date.parse(eta))) throw new RpcError("Enter a valid date and time.");
     const patch: Record<string, unknown> = { eta: new Date(eta).toISOString() };
     if (task.status === "received") patch.status = "in_progress";
-    const row = q(await db().from("tasks").update(patch).eq("id", task.id).select("*").single()) as Task;
+    const rows = q(await db().from("tasks").update(patch).eq("id", task.id).eq("status", task.status).select("*")) as Task[];
+    if (rows.length === 0) throw new RpcError("This ticket just changed. Reload it and try again.", 409);
+    const row = rows[0];
     await systemMessage(task.id, task.eta ? "The delivery time was updated." : "A delivery time was set.");
     return (await decorateTasks([row]))[0];
   },
@@ -1594,9 +1695,9 @@ export const handlers: Record<string, Handler> = {
     ) as any;
 
     if (senderRole === "va" && args.ask === true && task.status === "in_progress") {
-      q(await db().from("tasks").update({ status: "waiting", ...pauseTimerPatch(task) }).eq("id", task.id).select("id"));
+      q(await db().from("tasks").update({ status: "waiting", ...pauseTimerPatch(task) }).eq("id", task.id).eq("status", "in_progress").select("id"));
     } else if (senderRole === "agent" && task.status === "waiting") {
-      q(await db().from("tasks").update({ status: "in_progress" }).eq("id", task.id).select("id"));
+      q(await db().from("tasks").update({ status: "in_progress" }).eq("id", task.id).eq("status", "waiting").select("id"));
     }
     return { ...row, sender_name: onBehalf ? undefined : p.name };
   },
@@ -1627,7 +1728,9 @@ export const handlers: Record<string, Handler> = {
       patch.status = "in_progress";
       patch.delivered_at = null;
     }
-    const row = q(await db().from("tasks").update(patch).eq("id", task.id).select("*").single()) as Task;
+    const rows = q(await db().from("tasks").update(patch).eq("id", task.id).eq("status", "delivered").select("*")) as Task[];
+    if (rows.length === 0) throw new RpcError("This request just changed. Reload it and try again.", 409);
+    const row = rows[0];
     if (feedback === "revision_requested") {
       await systemMessage(task.id, "The user asked for a revision.");
       const note = optStr(args.note, 2000);
@@ -1672,7 +1775,8 @@ export const handlers: Record<string, Handler> = {
     await assertAgentAccess(p, agentId);
     const channel = ["text", "email", "call"].includes(args.channel) ? args.channel : "text";
     const current = await buildCheckin(p, agentId);
-    await audit(p, "checkin.sent", "agent", agentId, { channel, count: current.items.length, note: optStr(args.note, 300) });
+    const logged = await db().from("audit_log").insert({ actor_id: p.id, action: "checkin.sent", object_type: "agent", object_id: agentId, detail: { channel, count: current.items.length, note: optStr(args.note, 300) } });
+    if (logged.error) throw new RpcError("The check-in could not be logged. Try again.", 500);
     return buildCheckin(p, agentId);
   },
 

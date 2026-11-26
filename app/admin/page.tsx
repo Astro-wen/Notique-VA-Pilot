@@ -320,11 +320,21 @@ function AdminPage() {
 
       <Modal
         open={!!reset}
-        onClose={() => setReset(null)}
+        onClose={() => {
+          setReset(null);
+          setPassword("");
+        }}
         title={`Reset password for ${reset?.name ?? ""}`}
         footer={
           <>
-            <Button onClick={() => setReset(null)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                setReset(null);
+                setPassword("");
+              }}
+            >
+              Cancel
+            </Button>
             <Button variant="primary" busy={busy} onClick={resetPassword}>
               Change password
             </Button>

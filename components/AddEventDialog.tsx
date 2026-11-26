@@ -89,12 +89,22 @@ export function AddEventDialog({ open, onClose, projects, agentId, defaultProjec
           pid = project.id;
           setProjectId(pid);
         }
-        for (let i = 0; i < files.length; i += 1) {
-          setBusy(`Uploading ${i + 1} of ${files.length}`);
+        const empty = files.find((f) => f.size === 0);
+        if (empty) {
+          setBusy(null);
+          return setError(`"${empty.name}" is empty. Remove it and try again.`);
+        }
+        const total = files.length;
+        let left = files.slice();
+        for (let i = 0; i < total; i += 1) {
+          setBusy(`Uploading ${i + 1} of ${total}`);
           const up = await uploadFile(pid, files[i]);
           await rpc("addFile", { project_id: pid, kind: "project", name: up.name, path: up.path, size: up.size, mime: up.mime, note: title.trim() || undefined });
+          // Drop each saved file from the selection, so a retry after a failure never uploads it twice.
+          left = left.slice(1);
+          setFiles(left);
         }
-        onFilesAdded?.(pid, files.length);
+        onFilesAdded?.(pid, total);
         onClose();
       } catch (err) {
         setError((err as Error).message);
@@ -107,7 +117,7 @@ export function AddEventDialog({ open, onClose, projects, agentId, defaultProjec
     if (!when || Number.isNaN(new Date(when).getTime())) return setError("Enter when the conversation happened.");
     if (new Date(when).getTime() > Date.now() + 5 * 60000) return setError("The conversation time cannot be in the future.");
     if (kind === "audio" && files.length === 0) return setError("Choose a recording to upload.");
-    if (kind !== "audio" && files.length === 0 && text.trim().length < 20) return setError(kind === "texts" ? "Add screenshots or paste the thread." : "Add a file or paste the text.");
+    if (kind !== "audio" && files.length === 0 && !(text.trim().length >= 20 || (/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/.test(text) && text.trim().length >= 6))) return setError(kind === "texts" ? "Add screenshots or paste the thread." : "Add a file or paste the text.");
     try {
       let pid = projectId;
       if (pid === "new") {
@@ -176,8 +186,10 @@ export function AddEventDialog({ open, onClose, projects, agentId, defaultProjec
               role="radio"
               aria-checked={kind === k.key}
               onClick={() => {
+                if (k.key === kind) return;
                 setKind(k.key);
                 setFiles([]);
+                if (fileRef.current) fileRef.current.value = "";
                 setError(null);
               }}
               className={cx("flex h-11 items-center justify-center gap-1.5 rounded-lg border px-1 text-[13px] font-medium leading-tight", kind === k.key ? "border-accent bg-accent-soft text-[#2f55cc]" : "border-line text-ink-2 hover:bg-page")}

@@ -279,7 +279,7 @@ export interface Watch {
   note: string | null;
   status: WatchStatus;
   last_checked_at: string | null;
-  last_result: { met: boolean; summary: string; sources: { title: string; url: string }[]; error?: string } | null;
+  last_result: { met: boolean; summary: string; sources: { title: string; url: string }[]; error?: string; /** Unreviewed client note drafted when the condition was met. Staff only. */ draft?: string } | null;
   met_at: string | null;
   task_id: string | null;
   created_at: string;
@@ -326,6 +326,8 @@ export interface ProjectDetail {
   lastVerified: { at: string; by: string } | null;
   /** Null when the watches table has not been created yet. */
   watches: Watch[] | null;
+  /** Uploads that could not be read. Shown so they do not silently disappear. */
+  failedUploads?: { id: string; title: string }[];
 }
 
 export interface ProjectListItem extends Project {

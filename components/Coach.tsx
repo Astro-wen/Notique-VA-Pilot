@@ -165,6 +165,7 @@ export function Coach({ name, steps, ready = true, primary }: { name: string; st
     if (index === null) return;
     const onKey = (e: KeyboardEvent) => {
       if (composing(e) || isTyping(e.target)) return;
+      if (e.key === "Enter" && (e.target as HTMLElement | null)?.closest?.("button,a")) return;
       if (e.key === "Escape") finish();
       else if (e.key === "ArrowRight" || e.key === "Enter") {
         e.preventDefault();
