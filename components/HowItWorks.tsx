@@ -186,7 +186,7 @@ export function HowItWorks({ role }: { role: "agent" | "va" | "admin" }) {
             Show all
           </button>
         ) : (
-          <span className="flex h-9 items-center px-1 text-[13px] text-ink-3">Click a step, or any box, to see who does what.</span>
+          <span className="flex h-9 items-center px-1 text-[13px] text-ink-3">Choose a step, or any box, to see who does what.</span>
         )}
       </div>
 

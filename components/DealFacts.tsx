@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { BadgeCheck, CalendarClock, ChevronDown, Quote } from "lucide-react";
-import { clock, dateOnly, plainDate } from "@/lib/client/format";
+import { clock, dateOnly, plainDate, followUpText } from "@/lib/client/format";
 import { SECTIONS, type Fact } from "@/lib/types";
 import { Badge, Button, cx } from "./ui";
 
@@ -20,8 +20,7 @@ export function FactRow({ fact, tz, action }: { fact: Fact; tz?: string; action?
           {fact.follow_up_date || fact.follow_up_condition ? (
             <p className="mt-1.5 flex items-center gap-1.5 text-[13px] text-ink-2">
               <CalendarClock className="h-3.5 w-3.5 text-ink-3" />
-              Follow up{fact.follow_up_date ? ` on ${plainDate(fact.follow_up_date)}` : ""}
-              {fact.follow_up_condition ? `${fact.follow_up_date ? ", or once: " : ": "}${fact.follow_up_condition}` : ""}
+              {followUpText(fact.follow_up_date ? plainDate(fact.follow_up_date) : null, fact.follow_up_condition)}
             </p>
           ) : null}
         </div>

@@ -33,7 +33,7 @@ const STEPS: Record<HelpRole, { title: string; body: string }[]> = {
 const FAQ: Record<HelpRole, [string, string][]> = {
   va: [
     ["What is the difference between Decline and Ask user?", "Decline means the AI got it wrong, so the item is thrown away. Ask user means it might be true but the transcript does not prove it. Those are held under Waiting for the user to confirm on the project, and the user never sees them as facts."],
-    ["Why is there no Approve button on some items?", "The AI was not sure about them. Use Edit and approve: read the quote, fix the wording, and save. That confirms you checked it."],
+    ["Why is there no Approve button on some items?", "Two reasons. The AI was not sure about the item, or the wording describes a person instead of the property (family, age, religion, disability, military service). Use Edit and approve: read the quote, rewrite it as a property requirement such as \"needs four bedrooms\", and save. Decline it if it has no property meaning."],
     ["The recording has no consent notice. What now?", "Do not submit. Choose Escalate and pick No recording consent heard. Nothing from the conversation reaches the user."],
     ["The user answered me by text instead of in the app.", "Open the ticket, switch the message box to Log user reply, pick the channel, and paste what they said. The ticket leaves Waiting on user on its own."],
     ["Can I send the AI first draft as it is?", "No. It is a starting point. Fill in every [ADD: ...], check each fact against the deal profile, and save your version to Deliverables."],

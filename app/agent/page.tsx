@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FolderKanban, Plus } from "lucide-react";
@@ -77,6 +77,11 @@ function AgentApp() {
   const { me } = useSession();
   const projectId = params.get("project");
   const { data, error, loading, reload } = useLoad(() => rpc<ProjectListItem[]>("listProjects"), [], { refreshMs: 30000 });
+  // Coming back to the list (Back, or All Projects) shows today's counts, not the ones from before.
+  useEffect(() => {
+    if (!projectId) reload(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
   const [create, setCreate] = useState(false);
   const [add, setAdd] = useState(false);
   const [task, setTask] = useState(false);

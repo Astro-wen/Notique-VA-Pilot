@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, CircleHelp, Flag, Pencil, Plus, Quote, RotateCcw, Search, Timer, Trash2, X } from "lucide-react";
 import { rpc } from "@/lib/client/api";
 import { FAIR_HOUSING_HELP, PROTECTED } from "@/lib/fairHousing";
-import { SOURCE_LABEL, clock, dateTime, plainDate, remaining } from "@/lib/client/format";
+import { SOURCE_LABEL, clock, dateTime, plainDate, remaining, followUpText } from "@/lib/client/format";
 import { SECTIONS, TASK_CATEGORIES, type EventChecks, type EventDetail, type Fact, type Section, type SuggestedTask, type Verdict } from "@/lib/types";
 import { Badge, Button, ErrorNote, Field, IconButton, Input, Kbd, Modal, Select, Spinner, Textarea, composing, cx, isTyping, useBackGuard, useToast } from "../ui";
 import type { VaNav } from "./Console";
@@ -122,6 +122,14 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
 
   const event = detail?.event;
   const readOnly = !event || !["ready", "in_review"].includes(event.status);
+  // Submitted from another window: close any open edit so nothing looks editable that is not.
+  useEffect(() => {
+    if (!readOnly || !event) return;
+    setEditId(null);
+    setDraft(null);
+    setSummaryDraft(null);
+    setAdding(null);
+  }, [readOnly, event]);
   const tz = nav.agent.timezone;
 
   /* Review timer. Counts only while this tab is visible. */
@@ -776,8 +784,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                               {f.verdict === "edited" && f.ai_statement && f.ai_statement !== f.statement ? <p className="mt-1 text-xs text-ink-3">AI draft: {f.ai_statement}</p> : null}
                               {f.follow_up_date || f.follow_up_condition ? (
                                 <p className="mt-1.5 text-[13px] text-ink-2">
-                                  Follow up{f.follow_up_date ? ` on ${plainDate(f.follow_up_date)}` : ""}
-                                  {f.follow_up_condition ? `${f.follow_up_date ? ", or once: " : ": "}${f.follow_up_condition}` : ""}
+                                  {followUpText(f.follow_up_date ? plainDate(f.follow_up_date) : null, f.follow_up_condition)}
                                 </p>
                               ) : null}
                               <div className="mt-2.5 space-y-1.5">

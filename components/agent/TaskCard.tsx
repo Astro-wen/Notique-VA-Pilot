@@ -232,7 +232,7 @@ export function TaskCard({ taskId, vaName, tz, preview, startEditing, onClose, o
               </div>
               {task.status === "delivered" && !preview ? (
                 <div className="mt-3 rounded-lg bg-page p-3">
-                  <p className="text-[13px] font-medium">{task.agent_feedback ? `You said: ${FEEDBACK_LABEL[task.agent_feedback]}` : "Read it above. You send it to your client yourself. Then tell us how it went."}</p>
+                  <p className="text-[13px] font-medium">{task.agent_feedback ? `You said: ${FEEDBACK_LABEL[task.agent_feedback]}` : deliverables.some(isShortText) ? "Read it above. You send it to your client yourself. Then tell us how it went." : "Open it above. You send it to your client yourself. Then tell us how it went."}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {(["used_as_is", "edited", "not_used"] as const).map((f) => (
                       <Button key={f} size="sm" variant={task.agent_feedback === f ? "primary" : "outline"} busy={busy === f} onClick={() => run(f, "setTaskFeedback", { feedback: f }, "Thanks, noted.")}>

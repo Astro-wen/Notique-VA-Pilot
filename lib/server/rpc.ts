@@ -1258,7 +1258,7 @@ export const handlers: Record<string, Handler> = {
     if (args.task_id) {
       const task = await loadTask(p, args.task_id);
       if (task.project_id !== project.id) throw new RpcError("That task belongs to a different project.");
-      if (kind === "deliverable" && !["received", "in_progress", "waiting"].includes(task.status)) throw new RpcError("This ticket is closed. Reload it before adding files.", 409);
+      if (kind === "deliverable" && !["received", "in_progress", "waiting"].includes(task.status)) throw new RpcError(`This ticket was ${task.status === "cancelled" ? "cancelled" : task.status === "delivered" ? "already delivered" : "closed"}, so files can no longer be added. The screen now shows the latest.`, 409);
       taskId = task.id;
     }
     let eventId: string | null = null;
@@ -2032,7 +2032,7 @@ export const handlers: Record<string, Handler> = {
       await db().from("tasks").update({ status: task.status, delivered_at: null }).eq("id", task.id).eq("status", "delivered");
       throw new RpcError("The deliverable was removed. Add one and deliver again.", 409);
     }
-    await systemMessage(task.id, `${p.name} delivered ${sent.length} ${sent.length === 1 ? "file" : "files"}.`);
+    await systemMessage(task.id, `${p.name} delivered ${sent.length === 1 ? "the work" : `${sent.length} items`}.`);
     await audit(p, "task.deliver", "task", task.id, { files: sent.length });
     notifyLater(task.agent_id, "delivered", "Your assistant delivered something", `Ready for you in Notique: ${task.title}. Review it before anything goes to your client. ${SITE()}/agent?project=${task.project_id}`, p);
     return (await decorateTasks([row]))[0];

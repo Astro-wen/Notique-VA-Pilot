@@ -196,7 +196,7 @@ export function TicketRow({ task, active, onClick, tz, showProject }: { task: Ta
         <span className="block truncate text-sm font-medium">{task.title}</span>
         <span className="block truncate text-xs text-ink-3">
           {showProject ? `${task.project_name}, ` : ""}
-          {task.status === "delivered" ? `Delivered ${dateTime(task.delivered_at, tz)}` : task.eta ? `ETA ${dateTime(task.eta, tz)}` : task.status === "suggested" ? "Suggested, the user has not sent it yet" : task.status === "cancelled" ? "Cancelled" : "ETA not set"}
+          {task.status === "delivered" ? `Delivered ${dateTime(task.delivered_at, tz)}` : task.status === "cancelled" ? "Cancelled" : task.status === "dismissed" ? "Dismissed by the user" : task.eta ? `ETA ${dateTime(task.eta, tz)}` : task.status === "suggested" ? "Suggested, the user has not sent it yet" : "ETA not set"}
         </span>
       </span>
       {showProject ? <Badge tone={STATUS_TONE[task.status]}>{TASK_STATUS_LABEL[task.status]}</Badge> : null}
@@ -229,7 +229,9 @@ export function ProjectView({ nav, projectId, tab, taskId }: { nav: VaNav; proje
   if (!data) return null;
   const { project } = data;
   const tz = data.agent.timezone;
-  const setTab = (key: string, extra?: Record<string, string | undefined>) => nav.go("project", { id: projectId, tab: key, ...extra });
+  // Keep where the VA came from (Tickets, Check-in), so the sidebar does not jump to Projects.
+  const from = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("from") ?? undefined : undefined;
+  const setTab = (key: string, extra?: Record<string, string | undefined>) => nav.go("project", { id: projectId, tab: key, from, ...extra });
   const current = ["tickets", "profile", "documents", "watches", "completed"].includes(tab) ? tab : "tickets";
   const openTasks = data.tasks.filter((t) => ["received", "in_progress", "waiting"].includes(t.status));
   const delivered = data.tasks.filter((t) => t.status === "delivered");

@@ -155,6 +155,11 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
       nav.refreshCounts();
     } catch (err) {
       toast((err as Error).message, { tone: "error" });
+      // The user cancelled it or it moved on elsewhere: show the ticket as it is now.
+      if ((err as { status?: number }).status === 409) {
+        void reload(true);
+        onChanged();
+      }
     } finally {
       setBusy(null);
       setConfirm(null);

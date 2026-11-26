@@ -219,9 +219,64 @@ function hasTypedText(root: HTMLElement | null): boolean {
   });
 }
 let guardSeq = 0;
+
+/*
+ * History bookkeeping. A dialog closed by its own buttons leaves its history entry behind (going back
+ * there could undo a navigation its Save just started). Those leftovers are marked notiqueDead, and Back
+ * steps over them, so one press still leaves the page.
+ */
+let mirror: { state: Record<string, unknown> | null; href: string } | null = null;
+let chase: { mode: "leave"; href: string } | { mode: "skipDead" } | null = null;
+let trackerInstalled = false;
+function installTracker() {
+  if (trackerInstalled || typeof window === "undefined") return;
+  trackerInstalled = true;
+  mirror = { state: window.history.state, href: window.location.href };
+  for (const method of ["pushState", "replaceState"] as const) {
+    const original = window.history[method].bind(window.history);
+    window.history[method] = function (data: unknown, unused: string, url?: string | URL | null) {
+      original(data, unused, url);
+      mirror = { state: window.history.state, href: window.location.href };
+    };
+  }
+  window.addEventListener("popstate", handlePopState);
+}
 function handlePopState() {
+  const departed = mirror;
+  mirror = { state: window.history.state, href: window.location.href };
   const top = backGuards[backGuards.length - 1];
-  if (top) top.onBack();
+  if (top) {
+    chase = null;
+    top.onBack();
+    return;
+  }
+  if (chase?.mode === "skipDead") {
+    if (window.history.state?.notiqueDead) return window.history.back();
+    chase = null;
+    return;
+  }
+  if (chase?.mode === "leave") {
+    if (window.location.href === chase.href) return window.history.back();
+    chase = null;
+    return;
+  }
+  // Back pressed while sitting on a leftover entry means "leave this page": keep going past this page.
+  if (departed?.state?.notiqueDead && window.location.href === departed.href) {
+    chase = { mode: "leave", href: departed.href };
+    return window.history.back();
+  }
+  // Coming back from another page onto a leftover entry: step over it to the real one.
+  if (window.history.state?.notiqueDead) {
+    chase = { mode: "skipDead" };
+    window.history.back();
+  }
+}
+/** Turns this dialog's entry, if it is still the current one, into a leftover that Back steps over. */
+function retireEntry(id: number) {
+  if (window.history.state?.notiqueModal !== id) return;
+  const rest = { ...window.history.state, notiqueDead: true };
+  delete rest.notiqueModal;
+  window.history.replaceState(rest, "", window.location.href);
 }
 function handleBeforeUnload(e: BeforeUnloadEvent) {
   if (!backGuards.some((g) => g.hasText())) return;
@@ -240,32 +295,23 @@ export function useBackGuard(active: boolean, onBlocked: () => void) {
   });
   useEffect(() => {
     if (!active || typeof window === "undefined") return;
+    installTracker();
     const id = ++guardSeq;
-    window.history.pushState({ ...(window.history.state ?? {}), notiqueModal: id }, "", window.location.href);
-    if (backGuards.length === 0) {
-      window.addEventListener("popstate", handlePopState);
-      window.addEventListener("beforeunload", handleBeforeUnload);
-    }
+    window.history.pushState({ ...(window.history.state ?? {}), notiqueModal: id, notiqueDead: undefined }, "", window.location.href);
+    if (backGuards.length === 0) window.addEventListener("beforeunload", handleBeforeUnload);
     backGuards.push({
       id,
       hasText: () => true,
       onBack: () => {
-        window.history.pushState({ ...(window.history.state ?? {}), notiqueModal: id }, "", window.location.href);
+        window.history.pushState({ ...(window.history.state ?? {}), notiqueModal: id, notiqueDead: undefined }, "", window.location.href);
         blocked.current();
       },
     });
     return () => {
       const at = backGuards.findIndex((g) => g.id === id);
       if (at >= 0) backGuards.splice(at, 1);
-      if (backGuards.length === 0) {
-        window.removeEventListener("popstate", handlePopState);
-        window.removeEventListener("beforeunload", handleBeforeUnload);
-      }
-      if (window.history.state?.notiqueModal === id) {
-        const rest = { ...window.history.state };
-        delete rest.notiqueModal;
-        window.history.replaceState(rest, "", window.location.href);
-      }
+      if (backGuards.length === 0) window.removeEventListener("beforeunload", handleBeforeUnload);
+      retireEntry(id);
     };
   }, [active]);
 }
@@ -277,6 +323,8 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
   closeRef.current = onClose;
   const dirty = useRef(false);
   const guardId = useRef(0);
+  // The second click of a double click on the button that opened this dialog lands on the backdrop.
+  const openedAt = useRef(0);
   const [askDiscard, setAskDiscard] = useState(false);
   const markDirty = (e: React.FormEvent) => {
     // Typing in a dialog opened on top of this one belongs to that dialog.
@@ -284,13 +332,11 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
     if (dirty.current) return;
     dirty.current = true;
     if (typeof window === "undefined" || guardId.current) return;
+    installTracker();
     const id = ++guardSeq;
     guardId.current = id;
-    window.history.pushState({ ...(window.history.state ?? {}), notiqueModal: id }, "", window.location.href);
-    if (backGuards.length === 0) {
-      window.addEventListener("popstate", handlePopState);
-      window.addEventListener("beforeunload", handleBeforeUnload);
-    }
+    window.history.pushState({ ...(window.history.state ?? {}), notiqueModal: id, notiqueDead: undefined }, "", window.location.href);
+    if (backGuards.length === 0) window.addEventListener("beforeunload", handleBeforeUnload);
     backGuards.push({
       id,
       hasText: () => hasTypedText(ref.current),
@@ -301,13 +347,14 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
           return;
         }
         // Back already left the dialog's entry. Put it back and ask, so nothing typed is lost by accident.
-        window.history.pushState({ ...(window.history.state ?? {}), notiqueModal: id }, "", window.location.href);
+        window.history.pushState({ ...(window.history.state ?? {}), notiqueModal: id, notiqueDead: undefined }, "", window.location.href);
         setAskDiscard(true);
       },
     });
   };
   useEffect(() => {
     if (!open) return;
+    openedAt.current = Date.now();
     dirty.current = false;
     setAskDiscard(false);
     const onKey = (e: KeyboardEvent) => {
@@ -335,23 +382,16 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
         guardId.current = 0;
         const at = backGuards.findIndex((g) => g.id === id);
         if (at >= 0) backGuards.splice(at, 1);
-        if (backGuards.length === 0) {
-          window.removeEventListener("popstate", handlePopState);
-          window.removeEventListener("beforeunload", handleBeforeUnload);
-        }
-        // Leave the extra entry in place but unmark it. Going back here could undo a navigation the
-        // dialog's own Save just started, which is worse than one extra Back press later.
-        if (window.history.state?.notiqueModal === id) {
-          const rest = { ...window.history.state };
-          delete rest.notiqueModal;
-          window.history.replaceState(rest, "", window.location.href);
-        }
+        if (backGuards.length === 0) window.removeEventListener("beforeunload", handleBeforeUnload);
+        // Going back here could undo a navigation the dialog's own Save just started, so the entry
+        // stays and is marked as a leftover that Back steps over.
+        retireEntry(id);
       }
     };
   }, [open]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" data-modal onMouseDown={(e) => e.target === e.currentTarget && (!dirty.current || !hasTypedText(ref.current)) && onClose()}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" data-modal onMouseDown={(e) => e.target === e.currentTarget && Date.now() - openedAt.current > 400 && (!dirty.current || !hasTypedText(ref.current)) && onClose()}>
       <div ref={ref} tabIndex={-1} onInput={markDirty} role="dialog" aria-modal="true" aria-labelledby={titleId} className={cx("rise flex max-h-[92vh] w-full flex-col rounded-t-2xl bg-white shadow-xl outline-none sm:rounded-xl", wide ? "sm:max-w-2xl" : "sm:max-w-md")}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
           <h2 id={titleId} className="text-base font-semibold">
@@ -407,7 +447,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={push}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex flex-col items-center gap-2 px-4" aria-live="polite">
+      <div className="pointer-events-none fixed inset-x-0 top-3 z-[60] flex flex-col items-center gap-2 px-4 sm:top-auto sm:bottom-4" aria-live="polite">
         {toasts.map((t) => (
           <div key={t.id} className={cx("rise pointer-events-auto flex max-w-md items-center gap-3 rounded-lg px-4 py-2.5 text-[13px] text-white shadow-lg", t.tone === "error" ? "bg-bad" : "bg-ink")}>
             <span>{t.message}</span>

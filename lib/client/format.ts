@@ -151,3 +151,12 @@ export function projectLine(p: { deal_type: string; area: string | null; budget:
 export function isPast(iso: string | null | undefined): boolean {
   return !!iso && new Date(iso).getTime() < Date.now();
 }
+
+/** "Follow up on Nov 20, or sooner after the HOA documents arrive" in plain words. */
+export function followUpText(dateText: string | null, condition: string | null): string {
+  const cond = (condition ?? "").replace(/^once:?\s*/i, "").trim();
+  const when = cond ? (/^(when|after|if|once|before|as soon as)\b/i.test(cond) ? cond : `when ${cond}`) : "";
+  if (dateText && when) return `Follow up on ${dateText}, or sooner ${when}`;
+  if (dateText) return `Follow up on ${dateText}`;
+  return when ? `Follow up ${when}` : "";
+}

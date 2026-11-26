@@ -73,6 +73,7 @@ export function AddFile({ projectId, taskId, kind, onAdded, allowLink, label }: 
       onAdded();
     } catch (err) {
       toast((err as Error).message, { tone: "error" });
+      if ((err as { status?: number }).status === 409) onAdded();
     } finally {
       setBusy(false);
       if (ref.current) ref.current.value = "";
@@ -93,6 +94,7 @@ export function AddFile({ projectId, taskId, kind, onAdded, allowLink, label }: 
       onAdded();
     } catch (err) {
       toast((err as Error).message, { tone: "error" });
+      if ((err as { status?: number }).status === 409) onAdded();
     } finally {
       setBusy(false);
     }

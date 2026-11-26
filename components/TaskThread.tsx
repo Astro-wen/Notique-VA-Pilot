@@ -5,6 +5,25 @@ import { rpc } from "@/lib/client/api";
 import { CHANNEL_LABEL, dateTime } from "@/lib/client/format";
 import type { TaskMessage } from "@/lib/types";
 import { Button, Select, Textarea, composing, cx, useToast } from "./ui";
+import { useSession } from "./Session";
+
+/** Message text with web addresses turned into links that open in a new tab. */
+function Linked({ text, dark }: { text: string; dark: boolean }) {
+  const parts = text.split(/((?:https?:\/\/|www\.)[^\s<>()]+[^\s<>().,;:!?'"])/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? (
+          <a key={i} href={part.startsWith("www.") ? `https://${part}` : part} target="_blank" rel="noopener noreferrer" className={cx("break-all underline underline-offset-2", dark ? "text-white" : "text-accent")}>
+            {part}
+          </a>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+}
 
 interface Props {
   taskId: string;
@@ -18,6 +37,14 @@ interface Props {
 
 /** Conversation between the user and the VA on one task. */
 export function TaskThread({ taskId, messages, viewer, otherName, disabled, canAsk, onSent }: Props) {
+  const { me } = useSession();
+  const myName = me?.profile.name ?? "";
+  const myFirst = myName.split(" ")[0];
+  // System lines name people ("Jarvis cancelled this request"); the person reading their own line sees "You".
+  const asYou = (body: string) => {
+    for (const name of [myName, myFirst]) if (name && body.startsWith(`${name} `)) return `You ${body.slice(name.length + 1)}`;
+    return body;
+  };
   const toast = useToast();
   // Each mode keeps its own text, so words typed as the VA never get filed as the user's reply, or the reverse.
   const [bodies, setBodies] = useState<{ send: string; log: string }>({ send: "", log: "" });
@@ -69,7 +96,7 @@ export function TaskThread({ taskId, messages, viewer, otherName, disabled, canA
           if (m.sender_role === "system") {
             return (
               <div key={m.id} className="text-center text-xs text-ink-3">
-                {m.body} {dateTime(m.created_at)}
+                {asYou(m.body)} {dateTime(m.created_at)}
               </div>
             );
           }
@@ -77,7 +104,9 @@ export function TaskThread({ taskId, messages, viewer, otherName, disabled, canA
           const who = mine ? "You" : m.sender_name ?? (m.sender_role === "agent" ? (viewer === "va" ? otherName : "You") : otherName);
           return (
             <div key={m.id} className={cx("flex flex-col", mine ? "items-end" : "items-start")}>
-              <div className={cx("max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-sm", mine ? "bg-ink text-white" : "bg-page text-ink")}>{m.body}</div>
+              <div className={cx("max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-sm", mine ? "bg-ink text-white" : "bg-page text-ink")}>
+                <Linked text={m.body} dark={mine} />
+              </div>
               <div className="mt-1 text-xs text-ink-3">
                 {m.sender_role === "agent" && !m.sender_id ? (viewer === "va" ? `${otherName}, logged from ${CHANNEL_LABEL[m.channel]?.toLowerCase() ?? m.channel}` : `You, by ${m.channel === "call" ? "phone" : CHANNEL_LABEL[m.channel]?.toLowerCase() ?? m.channel}, noted by ${otherName}`) : who}
                 {", "}
