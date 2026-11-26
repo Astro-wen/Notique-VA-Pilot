@@ -179,7 +179,7 @@ async function loadEvent(p: Profile, eventId: unknown): Promise<EventRow & { raw
 async function loadTask(p: Profile, taskId: unknown): Promise<Task> {
   const id = uid(taskId, "Task");
   const row = q(await db().from("tasks").select("*").eq("id", id).maybeSingle()) as Task | null;
-  if (!row) throw new RpcError("Task not found.", 404);
+  if (!row) throw new RpcError("This request was not found. It may have been removed.", 404);
   await assertAgentAccess(p, row.agent_id);
   return row;
 }
@@ -1888,8 +1888,8 @@ export const handlers: Record<string, Handler> = {
   async updateTask(ctx, args): Promise<Task> {
     const p = me(ctx);
     const task = await loadTask(p, args.task_id);
-    if (["delivered", "cancelled"].includes(task.status)) throw new RpcError("This task can no longer be edited.");
-    if (p.role === "agent" && !["suggested", "received"].includes(task.status)) throw new RpcError("Work has started on this task. Send a message to change the request.");
+    if (["delivered", "cancelled", "dismissed"].includes(task.status)) throw new RpcError(p.role === "agent" ? `This request was already ${task.status} and can no longer be changed.` : "This ticket can no longer be edited.", 409);
+    if (p.role === "agent" && !["suggested", "received"].includes(task.status)) throw new RpcError("Your assistant has already started on this request, so it can no longer be edited.", 409);
     const patch: Record<string, unknown> = {};
     if (typeof args.title === "string") patch.title = str(args.title, "Title", 140);
     if (typeof args.description === "string") patch.description = longText(args.description, "Details", 2000);
@@ -1902,10 +1902,10 @@ export const handlers: Record<string, Handler> = {
   async assignTask(ctx, args): Promise<Task> {
     const p = me(ctx);
     const task = await loadTask(p, args.task_id);
-    if (task.status !== "suggested") throw new RpcError("This task has already been handled.");
+    if (task.status !== "suggested") throw new RpcError("This suggestion was already sent or dismissed.", 409);
     const via = isStaff(p) ? str(args.requested_via, "How the user approved this", 20) : "in_app";
     const rows = q(await db().from("tasks").update({ status: "received", assigned_at: new Date().toISOString(), requested_via: via }).eq("id", task.id).eq("status", "suggested").select("*")) as Task[];
-    if (rows.length === 0) throw new RpcError("This task has already been handled.", 409);
+    if (rows.length === 0) throw new RpcError("This suggestion was already sent or dismissed.", 409);
     const row = rows[0];
     await audit(p, "task.assign", "task", task.id, { via });
     draftLater(row);
@@ -1929,7 +1929,7 @@ export const handlers: Record<string, Handler> = {
   async cancelTask(ctx, args) {
     const p = me(ctx);
     const task = await loadTask(p, args.task_id);
-    if (["delivered", "cancelled", "dismissed"].includes(task.status)) throw new RpcError("This task is already closed.");
+    if (["delivered", "cancelled", "dismissed"].includes(task.status)) throw new RpcError(`This request was already ${task.status}.`, 409);
     const done = q(await db().from("tasks").update({ status: "cancelled", ...pauseTimerPatch(task) }).eq("id", task.id).eq("status", task.status).select("id")) as any[];
     if (done.length === 0) throw new RpcError("This request just changed. Reload it and try again.", 409);
     await systemMessage(task.id, `${p.role === "agent" ? "The user" : p.name} cancelled this task.`);
@@ -1972,7 +1972,7 @@ export const handlers: Record<string, Handler> = {
   async sendTaskMessage(ctx, args): Promise<TaskDetail["messages"][number]> {
     const p = me(ctx);
     const task = await loadTask(p, args.task_id);
-    if (["cancelled", "dismissed", "suggested"].includes(task.status)) throw new RpcError("Messages can only be sent on active tasks.");
+    if (["cancelled", "dismissed", "suggested"].includes(task.status)) throw new RpcError(task.status === "suggested" ? "Send this request first, then you can message about it." : `This request was ${task.status}, so messages are closed.`, 409);
     const body = str(args.body, "Message", 4000);
     const staffUser = isStaff(p);
     const onBehalf = staffUser && args.as_agent === true;

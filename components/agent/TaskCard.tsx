@@ -22,6 +22,7 @@ export function TaskFormDialog({ open, onClose, projectId, task, onSaved, projec
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("Research");
   const [busy, setBusy] = useState(false);
+  const [locked, setLocked] = useState<string | null>(null);
   const [pid, setPid] = useState(projectId);
   useEffect(() => {
     if (!open) return;
@@ -29,6 +30,7 @@ export function TaskFormDialog({ open, onClose, projectId, task, onSaved, projec
     setTitle(task?.title ?? "");
     setDescription(task?.description ?? "");
     setCategory(task?.category ?? "Research");
+    setLocked(null);
     // Only when the dialog opens or a different request is edited. The parent refreshes in the
     // background and hands in a new object each time, which must never wipe what is being typed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -40,6 +42,28 @@ export function TaskFormDialog({ open, onClose, projectId, task, onSaved, projec
     try {
       const saved = task ? await rpc<Task>("updateTask", { task_id: task.id, title, description, category }) : await rpc<Task>("createTask", { project_id: pid, title, description, category });
       onSaved(saved);
+      onClose();
+    } catch (err) {
+      // Someone else moved the request on while this was open. Keep what was typed and offer the next best path.
+      if (task && (err as { status?: number }).status === 409) setLocked((err as Error).message);
+      else toast((err as Error).message, { tone: "error" });
+    } finally {
+      setBusy(false);
+    }
+  }
+  const canMessage = !!task && !!locked && !/delivered|cancelled|dismissed/.test(locked);
+  async function sendAsMessage() {
+    if (!task) return;
+    const parts = [title.trim() !== task.title ? `New title: ${title.trim()}` : "", description.trim() !== task.description ? description.trim() : ""].filter(Boolean);
+    if (!parts.length) {
+      onClose();
+      return;
+    }
+    setBusy(true);
+    try {
+      await rpc("sendTaskMessage", { task_id: task.id, body: `Change to this request:\n${parts.join("\n")}` });
+      toast("Sent as a message.");
+      onSaved({ ...task });
       onClose();
     } catch (err) {
       toast((err as Error).message, { tone: "error" });
@@ -54,14 +78,21 @@ export function TaskFormDialog({ open, onClose, projectId, task, onSaved, projec
       title={task ? "Edit request" : "Submit a request"}
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" busy={busy} onClick={save}>
-            {task ? "Save" : "Submit request"}
-          </Button>
+          <Button onClick={onClose}>{locked ? "Discard my change" : "Cancel"}</Button>
+          {canMessage ? (
+            <Button variant="primary" busy={busy} onClick={sendAsMessage}>
+              Send my change as a message
+            </Button>
+          ) : locked ? null : (
+            <Button variant="primary" busy={busy} onClick={save}>
+              {task ? "Save" : "Submit request"}
+            </Button>
+          )}
         </>
       }
     >
       <div className="space-y-4">
+        {locked ? <p className="rounded-lg bg-warn-soft px-3 py-2 text-[13px] text-warn">{locked}{canMessage ? " Your text is still here. Send it as a message and your assistant will see it on the request." : ""}</p> : null}
         {projects && !task ? (
           <Field label="Client">
             <Select value={pid} onChange={(e) => setPid(e.target.value)}>
@@ -94,10 +125,13 @@ export function TaskFormDialog({ open, onClose, projectId, task, onSaved, projec
   );
 }
 
-export function TaskCard({ taskId, vaName, tz, preview, onClose, onChanged }: { taskId: string | null; vaName: string; tz: string; preview?: boolean; onClose: () => void; onChanged: () => void }) {
+export function TaskCard({ taskId, vaName, tz, preview, startEditing, onClose, onChanged }: { taskId: string | null; vaName: string; tz: string; preview?: boolean; startEditing?: boolean; onClose: () => void; onChanged: () => void }) {
   const toast = useToast();
   const { data, error, loading, reload } = useLoad(() => (taskId ? rpc<TaskDetail>("getTask", { task_id: taskId }) : Promise.resolve(null)), [taskId], { refreshMs: taskId ? 15000 : undefined });
   const [edit, setEdit] = useState(false);
+  useEffect(() => {
+    if (taskId && startEditing) setEdit(true);
+  }, [taskId, startEditing]);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [revision, setRevision] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);

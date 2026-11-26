@@ -29,7 +29,9 @@ function TaskRow({ task, tz, onOpen, children }: { task: Task; tz: string; onOpe
                 ? `Delivered ${dateTime(task.delivered_at, tz)}`
                 : task.eta
                   ? `Expected ${dateTime(task.eta, tz)}`
-                  : "Delivery time coming shortly"}
+                  : task.assigned_at
+                    ? `Sent ${dateTime(task.assigned_at, tz)}, waiting for a delivery time`
+                    : "Waiting for a delivery time"}
           </span>
         </span>
         {task.status !== "suggested" ? <Badge tone={status.tone}>{status.label}</Badge> : null}
@@ -45,6 +47,7 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
   const { data, error, loading, reload } = useLoad(() => rpc<ProjectDetail>("getProject", { project_id: projectId, as_agent: true }), [projectId], { refreshMs: 30000 });
   const [tab, setTab] = useState<Tab>("status");
   const [taskId, setTaskId] = useState<string | null>(null);
+  const [editFirst, setEditFirst] = useState(false);
   const [newTask, setNewTask] = useState(false);
   const [add, setAdd] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -312,7 +315,13 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
                         <Button size="sm" variant="primary" busy={busy === t.id} onClick={() => act(t.id, "assignTask", { task_id: t.id }, `Sent to ${vaName}.`)}>
                           Send to {vaName}
                         </Button>
-                        <Button size="sm" onClick={() => setTaskId(t.id)}>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setEditFirst(true);
+                            setTaskId(t.id);
+                          }}
+                        >
                           Edit
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => act(`d${t.id}`, "dismissTask", { task_id: t.id }, "Suggestion dismissed.", () => rpc("dismissTask", { task_id: t.id, undo: true }))}>
@@ -378,7 +387,7 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
       ) : null}
 
       {!preview ? <Coach name="agent-project" steps={TOURS.agentProject} /> : null}
-      <TaskCard taskId={taskId} vaName={vaName} tz={tz} preview={preview} onClose={() => setTaskId(null)} onChanged={() => reload(true)} />
+      <TaskCard taskId={taskId} vaName={vaName} tz={tz} preview={preview} startEditing={editFirst} onClose={() => { setTaskId(null); setEditFirst(false); }} onChanged={() => reload(true)} />
       <TaskFormDialog
         open={newTask}
         onClose={() => setNewTask(false)}
