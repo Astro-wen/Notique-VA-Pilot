@@ -1,6 +1,6 @@
 "use client";
-import { useRef, useState } from "react";
-import { Download, ExternalLink, FileText, Link2, Trash2, Upload } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Copy, Download, ExternalLink, FileText, Link2, Trash2, Upload } from "lucide-react";
 import { openFile, rpc, uploadFile } from "@/lib/client/api";
 import { dateTime, fileSize } from "@/lib/client/format";
 import type { FileRow } from "@/lib/types";
@@ -118,6 +118,51 @@ export function AddFile({ projectId, taskId, kind, onAdded, allowLink, label }: 
           </Button>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** True for a short text file that reads better on screen than as a download. */
+export function isShortText(file: FileRow): boolean {
+  if (file.url || !file.path) return false;
+  const text = (file.mime ?? "").startsWith("text/") || /\.(txt|md)$/i.test(file.name);
+  return text && (file.size ?? 0) <= 100 * 1024;
+}
+
+/** Shows a delivered text draft in place, with one tap to copy it into an email or a text message. */
+export function TextPreview({ file }: { file: FileRow }) {
+  const toast = useToast();
+  const [text, setText] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    rpc<{ url: string }>("fileUrl", { file_id: file.id })
+      .then(({ url }) => fetch(url))
+      .then((r) => (r.ok ? r.text() : Promise.reject(new Error(String(r.status)))))
+      .then((t) => live && setText(t))
+      .catch(() => live && setFailed(true));
+    return () => {
+      live = false;
+    };
+  }, [file.id]);
+  async function copy() {
+    if (text === null) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast("Copied. Paste it into your email or message.");
+    } catch {
+      toast("Could not copy. Press and hold the text to select it.", { tone: "error" });
+    }
+  }
+  if (failed) return null;
+  return (
+    <div className="rounded-lg border border-line bg-white">
+      <div className="max-h-72 overflow-y-auto whitespace-pre-wrap px-3 py-2.5 text-[13px] leading-relaxed text-ink">{text ?? "Loading the text..."}</div>
+      <div className="flex justify-end border-t border-line px-2 py-1.5">
+        <Button size="sm" icon={<Copy className="h-3.5 w-3.5" />} disabled={text === null} onClick={copy}>
+          Copy text
+        </Button>
+      </div>
     </div>
   );
 }

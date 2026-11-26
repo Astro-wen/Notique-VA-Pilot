@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { rpc } from "@/lib/client/api";
 import { FEEDBACK_LABEL, dateTime, remaining, taskNo } from "@/lib/client/format";
 import { TASK_CATEGORIES, type Task, type TaskDetail } from "@/lib/types";
-import { AddFile, FileItem } from "../FileList";
+import { AddFile, FileItem, TextPreview, isShortText } from "../FileList";
 import { TaskThread } from "../TaskThread";
 import { Badge, Button, ErrorNote, Field, Input, Modal, Select, Spinner, Textarea, useLoad, useToast, type Tone } from "../ui";
 
@@ -224,12 +224,15 @@ export function TaskCard({ taskId, vaName, tz, preview, startEditing, onClose, o
               <h4 className={label}>Delivered by {vaName}</h4>
               <div className="mt-2 space-y-2">
                 {deliverables.map((f) => (
-                  <FileItem key={f.id} file={f} />
+                  <div key={f.id} className="space-y-1.5">
+                    <FileItem file={f} />
+                    {isShortText(f) ? <TextPreview file={f} /> : null}
+                  </div>
                 ))}
               </div>
               {task.status === "delivered" && !preview ? (
                 <div className="mt-3 rounded-lg bg-page p-3">
-                  <p className="text-[13px] font-medium">{task.agent_feedback ? `You said: ${FEEDBACK_LABEL[task.agent_feedback]}` : "Open the file above first. You send it to your client yourself. Then tell us how it went."}</p>
+                  <p className="text-[13px] font-medium">{task.agent_feedback ? `You said: ${FEEDBACK_LABEL[task.agent_feedback]}` : "Read it above. You send it to your client yourself. Then tell us how it went."}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {(["used_as_is", "edited", "not_used"] as const).map((f) => (
                       <Button key={f} size="sm" variant={task.agent_feedback === f ? "primary" : "outline"} busy={busy === f} onClick={() => run(f, "setTaskFeedback", { feedback: f }, "Thanks, noted.")}>
