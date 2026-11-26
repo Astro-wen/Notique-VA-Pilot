@@ -19,7 +19,7 @@ export function Watches({ projectId, watches, tz, onChanged, onOpenTicket }: { p
   if (watches == null) {
     return (
       <Card className="mt-4">
-        <Empty icon={<Radar className="h-5 w-5" />} title="Watches are not switched on yet" body="An admin needs to run the watches migration in Supabase once. Everything else keeps working without it." />
+        <Empty icon={<Radar className="h-5 w-5" />} title="Watches are not set up yet" body="Ask your admin to turn them on. Everything else works without them." />
       </Card>
     );
   }
@@ -68,9 +68,9 @@ export function Watches({ projectId, watches, tz, onChanged, onOpenTicket }: { p
         {watches.map((w) => (
           <Card key={w.id} className="p-4">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge tone={w.status === "met" ? "ok" : w.status === "paused" ? "neutral" : "accent"}>{w.status === "met" ? "Happened" : w.status === "paused" ? "Paused" : "Watching"}</Badge>
+              <Badge tone={w.status === "met" ? "ok" : w.status === "paused" ? "neutral" : "accent"}>{w.status === "met" ? "Condition met" : w.status === "paused" ? "Paused" : "Watching"}</Badge>
               <span className="text-xs text-ink-3">{w.last_checked_at ? `Checked ${ago(w.last_checked_at)}` : "Not checked yet"}</span>
-              {w.met_at ? <span className="text-xs text-ink-3">True since {dateTime(w.met_at, tz)}</span> : null}
+              {w.met_at ? <span className="text-xs text-ink-3">Met {dateTime(w.met_at, tz)}</span> : null}
             </div>
             <p className="mt-1.5 font-medium">{w.condition}</p>
             {w.note ? <p className="mt-0.5 text-[13px] text-ink-3">{w.note}</p> : null}
@@ -91,7 +91,7 @@ export function Watches({ projectId, watches, tz, onChanged, onOpenTicket }: { p
             {w.status === "met" && w.last_result?.draft ? (
               <div className="mt-3 rounded-lg border border-line px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-ink-3">Draft note to the client</span>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-ink-3">Draft for the user to send to their client</span>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -117,7 +117,7 @@ export function Watches({ projectId, watches, tz, onChanged, onOpenTicket }: { p
               ) : null}
               {w.status === "met" && w.task_id ? (
                 <Button size="sm" variant="primary" onClick={() => onOpenTicket(w.task_id as string)}>
-                  Open the ticket
+                  Open the follow-up ticket
                 </Button>
               ) : null}
               {w.status === "active" ? (

@@ -98,7 +98,7 @@ function Processing({ rows, nav, reload }: { rows: QueueEvent[]; nav: VaNav; rel
             )}
             {e.status === "failed" || e.status === "escalated" ? (
               <IconButton
-                label="Delete this event"
+                label="Delete this conversation"
                 onClick={() => {
                   if (window.confirm(`Delete "${e.title}"? The upload and its draft facts are removed for good.`)) act("deleteEvent", e.id, "Event deleted.");
                 }}
@@ -151,7 +151,7 @@ export function Queue({ nav }: { nav: VaNav }) {
 
       <Card className="mt-5 overflow-hidden" data-tour="queue-table">
         <SectionTitle className="border-b border-line px-4 py-3" right={<span className="text-xs text-ink-3">Earliest deadline first</span>}>
-          Events to verify
+          Conversations to verify
         </SectionTitle>
         {data.events.length === 0 ? (
           <Empty
@@ -165,7 +165,7 @@ export function Queue({ nav }: { nav: VaNav }) {
             <table className="w-full min-w-[760px] text-left text-sm">
               <thead className="text-xs text-ink-3">
                 <tr className="border-b border-line">
-                  <th className="px-4 py-2 font-medium">Event</th>
+                  <th className="px-4 py-2 font-medium">Conversation</th>
                   <th className="px-3 py-2 font-medium">Project</th>
                   <th className="px-3 py-2 font-medium">Source</th>
                   <th className="px-3 py-2 font-medium">Received</th>
@@ -277,7 +277,7 @@ export function Sources({ nav }: { nav: VaNav }) {
   return (
     <div className="mx-auto max-w-6xl">
       <h1 className="text-xl font-semibold">Data sources</h1>
-      <p className="mt-0.5 text-[13px] text-ink-3">Everything {data.agent.name} sends in becomes an event in the queue. Add anything that reached you another way.</p>
+      <p className="mt-0.5 text-[13px] text-ink-3">Everything {data.agent.name} sends in becomes a conversation in the queue. Add anything that reached you another way.</p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {SOURCE_CARDS.map((s) => {
           const count = s.keys.reduce((sum, k) => sum + (data.sources[k as keyof typeof data.sources]?.count_week ?? 0), 0);

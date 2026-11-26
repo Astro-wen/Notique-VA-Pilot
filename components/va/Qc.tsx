@@ -32,7 +32,7 @@ export function Qc({ nav }: { nav: VaNav }) {
   return (
     <div className="mx-auto max-w-6xl">
       <h1 className="text-xl font-semibold">QC review</h1>
-      <p className="mt-0.5 text-[13px] text-ink-3">How the work for {nav.agent.name} is going. Counts cover submitted events and delivered tickets.</p>
+      <p className="mt-0.5 text-[13px] text-ink-3">How the work for {nav.agent.name} is going. Counts cover submitted conversations and delivered tickets.</p>
       <Tabs
         className="mt-4"
         value={range}

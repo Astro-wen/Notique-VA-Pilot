@@ -2,12 +2,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BarChart3, ClipboardList, DatabaseZap, FolderKanban, Inbox, MessagesSquare, Settings2 } from "lucide-react";
+import { BarChart3, ClipboardList, DatabaseZap, FolderKanban, Inbox, MessagesSquare, Settings2, Workflow } from "lucide-react";
 import { rpc } from "@/lib/client/api";
 import { tzAbbr } from "@/lib/client/format";
 import type { AgentSummary } from "@/lib/types";
 import { useSession } from "../Session";
 import { UserMenu } from "../UserMenu";
+import { HowItWorks } from "../HowItWorks";
 import { Card, Empty, Logo, Select, cx } from "../ui";
 import { Queue, Sources } from "./Queue";
 import { Verify } from "./Verify";
@@ -17,7 +18,7 @@ import { Qc } from "./Qc";
 import { Checkin } from "./Checkin";
 import { AgentPreview } from "./AgentPreview";
 
-export type VaView = "queue" | "event" | "projects" | "project" | "tasks" | "checkin" | "sources" | "qc" | "preview";
+export type VaView = "queue" | "event" | "projects" | "project" | "tasks" | "checkin" | "sources" | "qc" | "how" | "preview";
 
 export interface VaNav {
   agent: AgentSummary;
@@ -32,6 +33,7 @@ const NAV: { key: VaView; label: string; icon: React.ReactNode; also?: VaView[] 
   { key: "checkin", label: "Check-in", icon: <MessagesSquare className="h-4 w-4" /> },
   { key: "sources", label: "Data sources", icon: <DatabaseZap className="h-4 w-4" /> },
   { key: "qc", label: "QC review", icon: <BarChart3 className="h-4 w-4" /> },
+  { key: "how", label: "How it works", icon: <Workflow className="h-4 w-4" /> },
 ];
 
 const STORE_KEY = "notique.va.agent";
@@ -178,6 +180,14 @@ export function Console() {
             <Sources nav={nav} />
           ) : view === "qc" ? (
             <Qc nav={nav} />
+          ) : view === "how" ? (
+            <div>
+              <h1 className="text-xl font-semibold">How Notique works</h1>
+              <p className="mt-1 max-w-3xl text-[13px] text-ink-2">One conversation goes in on the left. A finished follow-up comes out on the right. Click any step to see who does what and where you and the user hand off.</p>
+              <div className="mt-4">
+                <HowItWorks role="va" />
+              </div>
+            </div>
           ) : (
             <Queue nav={nav} />
           )}
@@ -186,7 +196,7 @@ export function Console() {
 
       {!focus ? (
         <nav aria-label="Sections" className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-white md:hidden">
-          {NAV.map((n) => {
+          {NAV.filter((n) => n.key !== "how").map((n) => {
             const active = n.key === view || n.also?.includes(view);
             return (
               <button key={n.key} data-tour={`nav-${n.key}`} onClick={() => go(n.key)} className={cx("flex h-14 flex-1 flex-col items-center justify-center gap-0.5 text-[11px]", active ? "font-semibold text-accent" : "text-ink-3")}>

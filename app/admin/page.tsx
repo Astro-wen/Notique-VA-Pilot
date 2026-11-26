@@ -19,6 +19,7 @@ function AdminPage() {
   const [create, setCreate] = useState(false);
   const [reset, setReset] = useState<AdminUser | null>(null);
   const [remove, setRemove] = useState<AdminUser | null>(null);
+  const [roleAsk, setRoleAsk] = useState<{ user: AdminUser; role: string } | null>(null);
   const [edit, setEdit] = useState<AdminUser | null>(null);
   const [editForm, setEditForm] = useState({ name: "", company: "", timezone: "America/Los_Angeles" });
   const [contact, setContact] = useState({ phone: "", notify: "off", brief: "off" });
@@ -36,7 +37,7 @@ function AdminPage() {
     setBusy(true);
     try {
       await rpc("adminCreateUser", form);
-      toast(`Account created. Send ${form.name.split(" ")[0]} the sign-in address, their email, and the temporary password.`);
+      toast(`Account created. Next: tick who they work with under Who serves whom, then send ${form.name.split(" ")[0]} the sign-in address, their email, and the temporary password.`);
       setCreate(false);
       setForm({ name: "", email: "", role: "agent", company: "", timezone: "America/Los_Angeles", password: "" });
       reload(true);
@@ -121,7 +122,10 @@ function AdminPage() {
           <Logo />
         </Link>
         <span className="rounded-md bg-page px-2 py-0.5 text-xs font-medium text-ink-2">Admin</span>
-        <Link href="/va" className="ml-auto text-[13px] text-accent hover:underline">
+        <Link href="/how" className="ml-auto text-[13px] text-accent hover:underline">
+          How it works
+        </Link>
+        <Link href="/va" className="text-[13px] text-accent hover:underline">
           Open VA Console
         </Link>
         <UserMenu />
@@ -142,7 +146,7 @@ function AdminPage() {
         {data ? (
           <>
             <Card className="mt-5 overflow-hidden">
-              <ul className="divide-y divide-line">
+              <ul className="divide-y divide-line" data-tour="admin-edit">
                 {users.map((u) => (
                   <li key={u.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                     <div className="min-w-0 flex-1">
@@ -165,7 +169,7 @@ function AdminPage() {
                     {u.id === me?.profile.id ? (
                       <Badge tone="dark">{ROLE_LABEL[u.role]} (you)</Badge>
                     ) : (
-                      <Select aria-label={`Role for ${u.name}`} className="!h-8 !w-28" value={u.role} onChange={(e) => changeRole(u, e.target.value)}>
+                      <Select aria-label={`Role for ${u.name}`} className="!h-8 !w-28" value={u.role} onChange={(e) => setRoleAsk({ user: u, role: e.target.value })}>
                         <option value="agent">User</option>
                         <option value="va">VA</option>
                         <option value="admin">Admin</option>
@@ -187,7 +191,7 @@ function AdminPage() {
             </Card>
 
             <h2 data-tour="admin-matrix" className="mt-8 w-fit text-[15px] font-semibold">Who serves whom</h2>
-            <p className="mt-0.5 text-[13px] text-ink-3">A VA only sees the users ticked here. Admins see every user.</p>
+            <p className="mt-0.5 text-[13px] text-ink-3">Tick the box where a VA meets a user. A VA only sees the users ticked here, and a user with no tick has no assistant. Admins see every user.</p>
             {vas.length === 0 || agents.length === 0 ? (
               <Card className="mt-3">
                 <Empty title="Add at least one VA and one user" body="Once both exist you can match them here." />
@@ -328,6 +332,28 @@ function AdminPage() {
             </div>
           ) : null}
         </div>
+      </Modal>
+
+      <Modal
+        open={!!roleAsk}
+        onClose={() => setRoleAsk(null)}
+        title={`Change ${roleAsk?.user.name ?? ""} to ${roleAsk ? ROLE_LABEL[roleAsk.role as keyof typeof ROLE_LABEL] : ""}?`}
+        footer={
+          <>
+            <Button onClick={() => setRoleAsk(null)}>Keep as is</Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                if (roleAsk) changeRole(roleAsk.user, roleAsk.role);
+                setRoleAsk(null);
+              }}
+            >
+              Change role
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink-2">This changes what they see the next time they open Notique. A VA or user who changes role loses the matches ticked under Who serves whom.</p>
       </Modal>
 
       <Modal

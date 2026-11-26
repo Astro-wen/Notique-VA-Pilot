@@ -9,13 +9,13 @@ import type { VaNav } from "./Console";
 import { Coach, TOURS } from "../Coach";
 
 const CHECKS: { key: keyof EventChecks; label: string; help: string }[] = [
-  { key: "consent", label: "Consent heard", help: "Everyone on the recording was told it is being recorded, or this source does not need consent (notes, texts)." },
-  { key: "pii", label: "Personal data masked", help: "No SSN, bank, or card numbers appear in any approved item." },
-  { key: "fair_housing", label: "Fair housing safe", help: "No approved item mentions race, religion, family status, disability, or other protected traits." },
-  { key: "type_match", label: "Matches the project", help: "This conversation is about this client and this deal." },
+  { key: "consent", label: "Consent heard", help: "Everyone was told they are being recorded. Notes and texts need no consent." },
+  { key: "pii", label: "Personal data masked", help: "No SSN, bank or card numbers in anything you approved." },
+  { key: "fair_housing", label: "Fair housing safe", help: "Nothing you approved mentions race, religion, family, age or disability." },
+  { key: "type_match", label: "Matches the project", help: "This conversation is about this client." },
 ];
 
-const VERDICT_LABEL: Record<Verdict, string> = { pending: "To decide", approved: "Approved", edited: "Edited", declined: "Declined", insufficient: "Needs user input" };
+const VERDICT_LABEL: Record<Verdict, string> = { pending: "To decide", approved: "Approved", edited: "Edited", declined: "Declined", insufficient: "Waiting for user" };
 const VERDICT_TONE: Record<Verdict, "neutral" | "ok" | "accent" | "bad" | "warn"> = { pending: "neutral", approved: "ok", edited: "accent", declined: "bad", insufficient: "warn" };
 
 function confidenceLabel(c: number | null): { text: string; tone: "ok" | "warn" | "bad" } | null {
@@ -157,7 +157,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
   async function decide(fact: Fact, verdict: Verdict, extra: Record<string, unknown> = {}): Promise<boolean> {
     if (readOnly) return false;
     if (verdict === "approved" && fact.origin === "ai" && fact.confidence !== null && fact.confidence < 0.6) {
-      toast("Low confidence. Edit the wording to confirm it, decline it, or mark it as needing user input.", { tone: "error" });
+      toast("The AI is not sure about this one. Press E to check the quote and fix the wording, D to decline, or I to ask the user.", { tone: "error" });
       return false;
     }
     const before = fact;
@@ -191,7 +191,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
     if (!draft) return;
     if (!draft.statement.trim()) return toast("The statement cannot be empty.", { tone: "error" });
     const canTask = draft.section === "questions" || draft.section === "next_steps";
-    if (canTask && draft.withTask && !draft.task.title.trim()) return toast("Give the suggested task a title, or untick it.", { tone: "error" });
+    if (canTask && draft.withTask && !draft.task.title.trim()) return toast("Give the suggested request a title, or untick it.", { tone: "error" });
     const unchanged = draft.statement.trim() === (fact.ai_statement ?? fact.statement).trim();
     const kept = draft;
     setEditId(null);
@@ -429,7 +429,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
           {!readOnly ? (
             <Badge>
               <Timer className="h-3 w-3" />
-              {clock(event.review_ms + elapsed)}
+              <span className="hidden sm:inline">Review time </span>{clock(event.review_ms + elapsed)}
             </Badge>
           ) : null}
           <IconButton label="Keyboard shortcuts" onClick={() => setShowKeys(true)}>
@@ -457,18 +457,23 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
             </Button>
           </div>
         ) : event.status === "failed" || event.status === "processing" || event.status === "extracting" ? (
-          <ErrorNote className="mt-3" message={event.status === "failed" ? event.error ?? "Processing failed. Retry it from the queue." : "This event is still being prepared. Go back to the queue and it will appear when ready."} />
+          <ErrorNote className="mt-3" message={event.status === "failed" ? event.error ?? "Processing failed. Retry it from the queue." : "This conversation is still being prepared. Go back to the queue and it will appear when ready."} />
         ) : (
-          <div data-tour="checks" id="verify-checks" className={cx("mt-3 flex w-fit flex-wrap items-center gap-x-5 gap-y-2 rounded-lg px-2 py-1.5 -ml-2", nudge && "flash ring-2 ring-warn")}>
-            <span className={cx("text-[13px] font-semibold", checksDone ? "text-ok" : "text-ink")}>
-              Confirm before you submit ({CHECKS.filter((c) => checks[c.key]).length} of 4)
-            </span>
-            {CHECKS.map((c) => (
-              <label key={c.key} className="flex items-center gap-2 text-[13px]" title={c.help}>
-                <input type="checkbox" className="h-4 w-4 accent-[#177245]" checked={!!checks[c.key]} onChange={(e) => setCheck(c.key, e.target.checked)} />
-                <span className={checks[c.key] ? "text-ink" : "text-ink-2"}>{c.label}</span>
-              </label>
-            ))}
+          <div data-tour="checks" id="verify-checks" className={cx("mt-3 rounded-lg px-2 py-1.5 -ml-2", nudge && "flash ring-2 ring-warn")}>
+            <div className={cx("text-[13px] font-semibold", checksDone ? "text-ok" : "text-ink")}>
+              Confirm each of these yourself before you submit ({CHECKS.filter((c) => checks[c.key]).length} of 4)
+            </div>
+            <div className="mt-1.5 grid gap-x-5 gap-y-1.5 sm:grid-cols-2 xl:grid-cols-4">
+              {CHECKS.map((c) => (
+                <label key={c.key} className="flex items-start gap-2 text-[13px]">
+                  <input type="checkbox" aria-label={c.label} className="mt-0.5 h-4 w-4 shrink-0 accent-[#177245]" checked={!!checks[c.key]} onChange={(e) => setCheck(c.key, e.target.checked)} />
+                  <span>
+                    <span className={cx("font-medium", checks[c.key] ? "text-ink" : "text-ink-2")}>{c.label}</span>
+                    <span className="block text-xs leading-snug text-ink-3">{c.help}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -520,7 +525,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
             {detail.audioUrl ? <audio ref={audioRef} controls preload="metadata" src={detail.audioUrl} className="h-9 w-full" /> : null}
           </div>
           <div data-tour="transcript" className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-            {detail.lines.length === 0 ? <p className="p-4 text-[13px] text-ink-3">This event has no transcript.</p> : null}
+            {detail.lines.length === 0 ? <p className="p-4 text-[13px] text-ink-3">This conversation has no transcript.</p> : null}
             {detail.lines.map((l) => {
               const isSelected = selected.includes(l.id);
               const dim = needle && !l.text.toLowerCase().includes(needle);
@@ -700,7 +705,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                                 <div className="rounded-lg bg-page p-3">
                                   <label className="flex items-center gap-2 text-[13px] font-medium">
                                     <input type="checkbox" className="h-4 w-4 accent-[#0d0d0d]" checked={draft.withTask} onChange={(e) => setDraft({ ...draft, withTask: e.target.checked })} />
-                                    Suggest a task to the user
+                                    Suggest a request to the user
                                   </label>
                                   {draft.withTask ? (
                                     <div className="mt-2 space-y-2">
@@ -748,7 +753,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                               </div>
                               {canTask && f.suggested_task ? (
                                 <p className="mt-2 rounded-lg border border-dashed border-line-strong px-2.5 py-2 text-[13px] text-ink-2">
-                                  <span className="font-medium text-ink">If approved, suggests a task:</span> {f.suggested_task.title}
+                                  <span className="font-medium text-ink">If approved, suggests this request to the user:</span> {f.suggested_task.title}
                                 </p>
                               ) : null}
 
@@ -771,17 +776,25 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                                   </div>
                                 ) : (
                                   <div className="mt-3 flex flex-wrap gap-2">
-                                    <Button size="sm" variant="primary" icon={<Check className="h-3.5 w-3.5" />} onClick={() => decide(f, "approved")}>
-                                      Approve {focused ? <Kbd>A</Kbd> : null}
-                                    </Button>
-                                    <Button size="sm" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => startEdit(f)}>
-                                      Edit {focused ? <Kbd>E</Kbd> : null}
-                                    </Button>
+                                    {f.origin === "ai" && f.confidence !== null && f.confidence < 0.6 ? (
+                                      <Button size="sm" variant="primary" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => startEdit(f)} title="The AI is not sure about this one. Read the quote, fix the wording, then save to approve it.">
+                                        Edit and approve {focused ? <Kbd>E</Kbd> : null}
+                                      </Button>
+                                    ) : (
+                                      <>
+                                        <Button size="sm" variant="primary" icon={<Check className="h-3.5 w-3.5" />} onClick={() => decide(f, "approved")}>
+                                          Approve {focused ? <Kbd>A</Kbd> : null}
+                                        </Button>
+                                        <Button size="sm" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => startEdit(f)}>
+                                          Edit {focused ? <Kbd>E</Kbd> : null}
+                                        </Button>
+                                      </>
+                                    )}
                                     <Button size="sm" icon={<X className="h-3.5 w-3.5" />} onClick={() => decide(f, "declined")} title="The AI got this wrong. It is discarded.">
                                       Decline {focused ? <Kbd>D</Kbd> : null}
                                     </Button>
                                     <Button size="sm" icon={<CircleHelp className="h-3.5 w-3.5" />} onClick={() => decide(f, "insufficient")} title="The transcript does not settle this. It is held for the user to confirm.">
-                                      Insufficient {focused ? <Kbd>I</Kbd> : null}
+                                      Ask user {focused ? <Kbd>I</Kbd> : null}
                                     </Button>
                                   </div>
                                 )
@@ -837,7 +850,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
       <Modal
         open={confirm}
         onClose={() => setConfirm(false)}
-        title="Submit this event?"
+        title="Submit this conversation?"
         footer={
           <>
             <Button onClick={() => setConfirm(false)}>Keep reviewing</Button>
@@ -860,8 +873,8 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
             ["Published as written", counts.approved],
             ["Published with your edits", counts.edited],
             ["Declined and discarded", counts.declined],
-            ["Held for user input", counts.insufficient],
-            ["Tasks suggested to the user", counts.tasks],
+            ["Waiting for the user to confirm", counts.insufficient],
+            ["Requests suggested to the user", counts.tasks],
           ].map(([label, value]) => (
             <div key={label as string} className="flex justify-between px-3 py-2">
               <dt className="text-ink-2">{label}</dt>
@@ -875,7 +888,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
       <Modal
         open={escalate !== null}
         onClose={() => setEscalate(null)}
-        title="Escalate this event"
+        title="Escalate this conversation"
         footer={
           <>
             <Button onClick={() => setEscalate(null)}>Cancel</Button>
@@ -885,7 +898,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
           </>
         }
       >
-        <p className="text-sm text-ink-2">Use this when the event should not be verified as it is. Nothing from it reaches the user.</p>
+        <p className="text-sm text-ink-2">Use this when the conversation should not be verified as it is, for example no consent, the wrong client, or audio you cannot follow. Nothing from it reaches the user. It leaves your queue and goes to your Notique lead, who returns it or removes it.</p>
         <div className="mt-3 flex flex-wrap gap-2">
           {["No recording consent heard", "Wrong project or client", "Audio too poor to verify", "Contains sensitive personal data"].map((r) => (
             <button key={r} onClick={() => setEscalate(r)} className="h-8 rounded-full border border-line px-3 text-[13px] hover:bg-page">
@@ -905,7 +918,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
             ["A", "Approve"],
             ["E", "Edit, then save with Ctrl or Cmd and Enter"],
             ["D", "Decline: the AI got it wrong"],
-            ["I", "Insufficient: hold for the user to confirm"],
+            ["I", "Ask user: the transcript does not settle it, so the user confirms"],
             ["U", "Undo the decision"],
             ["Enter", "Show the first quote in the transcript"],
             ["/", "Search the transcript"],

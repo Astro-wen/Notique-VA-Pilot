@@ -195,7 +195,7 @@ export function TaskCard({ taskId, vaName, tz, preview, onClose, onChanged }: { 
               </div>
               {task.status === "delivered" && !preview ? (
                 <div className="mt-3 rounded-lg bg-page p-3">
-                  <p className="text-[13px] font-medium">{task.agent_feedback ? `You said: ${FEEDBACK_LABEL[task.agent_feedback]}` : "How did it go? Review it before anything goes to your client."}</p>
+                  <p className="text-[13px] font-medium">{task.agent_feedback ? `You said: ${FEEDBACK_LABEL[task.agent_feedback]}` : "Open the file above first. You send it to your client yourself. Then tell us how it went."}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {(["used_as_is", "edited", "not_used"] as const).map((f) => (
                       <Button key={f} size="sm" variant={task.agent_feedback === f ? "primary" : "outline"} busy={busy === f} onClick={() => run(f, "setTaskFeedback", { feedback: f }, "Thanks, noted.")}>

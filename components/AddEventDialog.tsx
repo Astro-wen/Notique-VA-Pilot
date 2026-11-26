@@ -13,7 +13,7 @@ const KINDS: { key: AddKind; label: string; hint: string; icon: React.ReactNode 
   { key: "transcript", label: "Transcript", hint: "A .vtt, .txt, or .docx file, or pasted text", icon: <FileText className="h-4 w-4" /> },
   { key: "texts", label: "Text messages", hint: "Screenshots or a pasted thread", icon: <MessageSquareText className="h-4 w-4" /> },
   { key: "note", label: "Written note", hint: "A debrief or CRM note typed after the fact", icon: <NotebookPen className="h-4 w-4" /> },
-  { key: "files", label: "Photos, files", hint: "Showing schedules, listing sheets, flyers, anything kept for reference. Stored on the project as is. The AI does not read these.", icon: <Paperclip className="h-4 w-4" /> },
+  { key: "files", label: "Reference files", hint: "Showing schedules, listing sheets, flyers, anything kept for reference. Stored on the project as is. Not turned into facts.", icon: <Paperclip className="h-4 w-4" /> },
 ];
 
 const ACCEPT: Record<AddKind, string> = {
@@ -256,7 +256,7 @@ export function AddEventDialog({ open, onClose, projects, agentId, defaultProjec
                   <span className="font-medium text-ink">Choose {kind === "texts" ? "screenshots" : kind === "files" ? "photos or files" : "a file"}</span> or drop here
                 </span>
               )}
-              <span className="text-xs text-ink-3">{kind === "audio" ? "MP3, M4A, WAV, MP4 up to 500 MB" : kind === "transcript" ? "VTT, TXT, or DOCX" : kind === "files" ? "Up to 10 at a time. Your assistant sees them on the project" : "Up to 8 images of a text thread. The AI reads these"}</span>
+              <span className="text-xs text-ink-3">{kind === "audio" ? "MP3, M4A, WAV, MP4 up to 500 MB" : kind === "transcript" ? "VTT, TXT, or DOCX" : kind === "files" ? "Up to 10 at a time. Your assistant sees them on the project" : "Up to 8 images of a text thread"}</span>
             </button>
           </div>
         ) : null}
@@ -264,7 +264,7 @@ export function AddEventDialog({ open, onClose, projects, agentId, defaultProjec
         {kind === "audio" ? (
           <label className="flex items-center gap-2 text-[13px] text-ink-2">
             <input type="checkbox" className="h-4 w-4 accent-[#0d0d0d]" checked={memo} onChange={(e) => setMemo(e.target.checked)} />
-            This is the user talking alone after the meeting (voice memo)
+            {heading ? "Just me talking after the meeting (voice memo)" : "This is the user talking alone after the meeting (voice memo)"}
           </label>
         ) : kind === "files" ? null : files.length === 0 ? (
           <Field label={kind === "note" ? "Note" : "Or paste the text"}>

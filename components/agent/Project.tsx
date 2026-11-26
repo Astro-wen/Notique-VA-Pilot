@@ -137,7 +137,7 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
               Submit a request
             </Button>
             <Button data-tour="add-conversation" variant="primary" size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setAdd(true)}>
-              Add material
+              Add conversation
             </Button>
           </div>
         ) : null}
@@ -156,7 +156,7 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
       />
 
       {!preview && tab === "status" && attention.length ? (
-        <div className="mt-4 rounded-xl border border-line bg-white p-3.5">
+        <div data-tour="waiting" className="mt-4 rounded-xl border border-line bg-white p-3.5">
           <div className="text-xs font-semibold uppercase tracking-wide text-ink-3">Waiting on you</div>
           <ul className="mt-2 space-y-2">
             {attention.map((a) => (
@@ -218,7 +218,7 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
                 icon={<FileText className="h-5 w-5" />}
                 title={data.pendingEvents ? "Verification in progress" : "Nothing added yet"}
                 body={data.pendingEvents ? `${vaName === "your assistant" ? "Your assistant" : vaName} is checking the facts against the transcript. Decisions, changes, and open questions will show here.` : "Add a recording, transcript, or text thread and this page fills in with what was decided and what is still open."}
-                action={!preview && !data.pendingEvents ? <Button onClick={() => setAdd(true)}>Add material</Button> : null}
+                action={!preview && !data.pendingEvents ? <Button onClick={() => setAdd(true)}>Add conversation</Button> : null}
               />
             </Card>
           ) : (
@@ -389,7 +389,7 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
         }}
       />
       <AddEventDialog
-        heading="Add material"
+        heading="Add conversation"
         open={add}
         onClose={() => setAdd(false)}
         projects={[data.project]}

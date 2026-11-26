@@ -4,7 +4,7 @@ import { Providers } from "@/components/Providers";
 
 export const metadata: Metadata = {
   title: "Notique",
-  description: "Verified deal notes and assistant tasks for real estate agents.",
+  description: "Verified deal notes and assistant follow-up work for real estate agents.",
 };
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };

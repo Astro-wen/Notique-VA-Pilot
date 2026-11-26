@@ -87,7 +87,12 @@ function AgentApp() {
         <Link href="/agent" aria-label="All projects">
           <Logo />
         </Link>
-        <UserMenu />
+        <div className="flex items-center gap-3">
+          <Link href="/how" className="text-[13px] font-medium text-ink-2 hover:text-ink">
+            How it works
+          </Link>
+          <UserMenu />
+        </div>
       </header>
       <main className="mx-auto max-w-2xl px-4 py-5 pb-16">
         {projectId ? (
@@ -115,7 +120,7 @@ function AgentApp() {
                   </Button>
                 ) : null}
                 <Button data-tour="add-conversation" variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => setAdd(true)}>
-                  Add material
+                  Add conversation
                 </Button>
               </div>
             </div>
@@ -129,7 +134,7 @@ function AgentApp() {
                   body="Upload a recording, transcript, or text thread. Your assistant verifies the facts and suggests follow-up work by 9:00 AM the next business day."
                   action={
                     <Button variant="primary" onClick={() => setAdd(true)}>
-                      Add material
+                      Add conversation
                     </Button>
                   }
                 />
@@ -177,7 +182,7 @@ function AgentApp() {
         }}
       />
       <AddEventDialog
-        heading="Add material"
+        heading="Add conversation"
         open={add}
         onClose={() => setAdd(false)}
         projects={data ?? []}

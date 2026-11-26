@@ -71,7 +71,7 @@ export function NewTicketDialog({ open, onClose, projectId, onCreated }: { open:
         </>
       }
     >
-      <p className="text-[13px] text-ink-3">Log every piece of work the user asks for by text, email, or call, so nothing is lost and the deadline is tracked. The user sees it under Requests.</p>
+      <p className="text-[13px] text-ink-3">Log every piece of work the user asks for by text, email, or call, so nothing is lost and the deadline is tracked. The user sees this ticket as a request.</p>
       <div className="mt-4 space-y-4">
         <Field label="Title">
           <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} placeholder="Shortlist 3 bed homes near Lincoln Elementary" />
@@ -267,11 +267,11 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
         <h3 className={label}>Files from the user</h3>
         <div className="mt-2 space-y-2">
           {attachments.length === 0 ? <p className="text-[13px] text-ink-3">None attached.</p> : attachments.map((f) => <FileItem key={f.id} file={f} />)}
-          {!["delivered", "cancelled", "dismissed"].includes(task.status) ? <AddFile projectId={task.project_id} taskId={task.id} kind="attachment" label="Attach proof or a file" onAdded={() => reload(true)} /> : null}
+          {!["delivered", "cancelled", "dismissed"].includes(task.status) ? <AddFile projectId={task.project_id} taskId={task.id} kind="attachment" label="Add a file the user sent you" onAdded={() => reload(true)} /> : null}
         </div>
       </div>
 
-      {data.draft !== undefined ? <DraftPanel taskId={task.id} draft={data.draft ?? null} open={open} onSaved={() => reload(true)} onChanged={() => reload(true)} /> : null}
+      {data.draft !== undefined ? <div data-tour="ticket-draft"><DraftPanel taskId={task.id} draft={data.draft ?? null} open={open} onSaved={() => reload(true)} onChanged={() => reload(true)} /></div> : null}
 
       <div data-tour="ticket-deliverables">
         <h3 className={label}>Deliverables</h3>
@@ -299,7 +299,7 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
       ) : null}
 
       <div data-tour="ticket-thread">
-        <h3 className={label}>Conversation with {nav.agent.name.split(" ")[0]}</h3>
+        <h3 className={label}>Messages with {nav.agent.name.split(" ")[0]}</h3>
         <div className="mt-2">
           <TaskThread
             taskId={task.id}
@@ -318,7 +318,7 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
 
       {open ? (
         <div className="sticky bottom-0 -mx-4 flex items-center justify-between gap-3 border-t border-line bg-white px-4 py-3">
-          <span className="text-[13px] text-ink-3">{task.status === "received" ? "Set an ETA to start." : deliverables.length === 0 ? "Add a deliverable to finish." : "Ready when you are."}</span>
+          <span className="text-[13px] text-ink-3">{task.status === "received" ? "Set an ETA to start." : deliverables.length === 0 ? "Add a deliverable to finish." : "Deliverables are saved. Mark it delivered when you are done."}</span>
           <Button data-tour="ticket-deliver" variant="primary" icon={<Send className="h-4 w-4" />} disabled={task.status === "received" || deliverables.length === 0} onClick={() => setConfirm("deliver")}>
             Mark delivered
           </Button>
@@ -348,7 +348,7 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
       >
         <p className="text-sm text-ink-2">
           {confirm === "deliver"
-            ? `${nav.agent.name} will see ${deliverables.length} ${deliverables.length === 1 ? "file" : "files"} and the timer stops at ${clock(logged)}. Check that nothing in the files is addressed to the client as if already sent.`
+            ? `${nav.agent.name} will see ${deliverables.length} ${deliverables.length === 1 ? "file" : "files"} and the timer stops at ${clock(logged)}. ${nav.agent.name.split(" ")[0]} sends this to the client. Make sure it does not read as if it was already sent.`
             : "The user sees it as cancelled. Use this only if the user no longer needs it."}
         </p>
       </Modal>

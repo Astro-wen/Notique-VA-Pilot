@@ -113,7 +113,7 @@ export function ProjectList({ nav }: { nav: VaNav }) {
               </div>
               <div className="mt-4 flex gap-4 text-[13px] text-ink-2">
                 <span>{p.event_count} verified</span>
-                <span>{p.open_tasks} open {p.open_tasks === 1 ? "task" : "tasks"}</span>
+                <span>{p.open_tasks} open {p.open_tasks === 1 ? "ticket" : "tickets"}</span>
               </div>
               <div className="mt-1 text-xs text-ink-3">{p.last_activity ? `Last conversation ${ago(p.last_activity).toLowerCase()}` : "No conversations yet"}</div>
             </button>
@@ -143,7 +143,7 @@ function ShareDialog({ open, onClose, projectId, link, onChanged }: { open: bool
   }
   return (
     <Modal open={open} onClose={onClose} title="Read-only link">
-      <p className="text-sm text-ink-2">Anyone with this link can read the verified deal profile without signing in. Tasks, files, and messages are not included. Share it with the user only.</p>
+      <p className="text-sm text-ink-2">Anyone with this link can read the verified deal profile without signing in. Tickets, files, and messages are not included. Share it with the user only.</p>
       {link ? (
         <div className="mt-4 space-y-3">
           <div className="flex gap-2">
@@ -317,7 +317,7 @@ export function ProjectView({ nav, projectId, tab, taskId }: { nav: VaNav; proje
             </Button>
             {data.tasks.length === 0 ? (
               <Card>
-                <Empty title="No tickets yet" body="Tickets appear when the user assigns a suggested task or writes a new one. If the user asks by text or email, create the ticket here." />
+                <Empty title="No tickets yet" body="Tickets appear when the user sends a suggested request or writes a new one. The user calls them requests. If the user asks by text or email, create the ticket here." />
               </Card>
             ) : null}
             {GROUPS.map((g) => {
@@ -361,7 +361,7 @@ export function ProjectView({ nav, projectId, tab, taskId }: { nav: VaNav; proje
             {data.lastVerified ? <p className="text-[13px] text-ink-3">Last verified {dateTime(data.lastVerified.at, tz)} by {data.lastVerified.by}. This is what the user sees.</p> : null}
             {data.needsInput.length ? (
               <section className="rounded-xl border border-[#edd9a8] bg-warn-soft px-4 pt-3">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-warn">Needs user input ({data.needsInput.length})</h3>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-warn">Waiting for the user to confirm ({data.needsInput.length})</h3>
                 <p className="mt-1 text-[13px] text-ink-2">The transcript did not settle these, so the user cannot see them. Ask the user, then mark each one resolved, or add the confirmed fact from the next conversation.</p>
                 <div className="divide-y divide-[#edd9a8]">
                   {data.needsInput.map((f) => (

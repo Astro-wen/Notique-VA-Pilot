@@ -67,7 +67,7 @@ export function DraftPanel({ taskId, draft, open, onSaved, onChanged }: { taskId
     try {
       await rpc("saveTextDeliverable", { task_id: taskId, text });
       dirty.current = false;
-      toast("Saved as a deliverable. The user sees it once you mark the ticket delivered.");
+      toast("Saved under Deliverables. Nothing is sent yet. The user sees it once you mark the ticket delivered.");
       onSaved();
     } catch (err) {
       toast((err as Error).message, { tone: "error" });
@@ -115,7 +115,7 @@ export function DraftPanel({ taskId, draft, open, onSaved, onChanged }: { taskId
               setText(e.target.value);
             }}
           />
-          <p className="mt-1.5 text-xs text-ink-3">Written by AI and not reviewed. The user cannot see it. Check every fact, finish it, then save it as a deliverable.</p>
+          <p className="mt-1.5 text-xs text-ink-3">Written by AI and not reviewed. The user cannot see it. Check every fact, finish it, then save it to Deliverables below.</p>
         </>
       ) : null}
 
@@ -126,7 +126,7 @@ export function DraftPanel({ taskId, draft, open, onSaved, onChanged }: { taskId
         </Button>
         {draft?.status === "ready" ? (
           <Button size="sm" variant="primary" busy={busy === "save"} onClick={save}>
-            Save as deliverable
+            Save to deliverables
           </Button>
         ) : null}
       </div>

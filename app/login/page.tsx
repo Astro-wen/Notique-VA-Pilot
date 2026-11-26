@@ -45,7 +45,7 @@ export default function LoginPage() {
         <Logo className="mb-6 text-lg" />
         <Card className="p-6">
           <h1 className="text-lg font-semibold">Sign in</h1>
-          <p className="mt-1 text-[13px] text-ink-3">Use the email and password your Notique admin gave you.</p>
+          <p className="mt-1 text-[13px] text-ink-3">Use the email and password Notique gave you.</p>
           {setup?.problem ? <ErrorNote className="mt-4" message={setup.problem} /> : null}
           {setup?.needsSetup ? (
             <div className="mt-4 rounded-lg bg-accent-soft px-3 py-2.5 text-[13px]">
@@ -68,7 +68,7 @@ export default function LoginPage() {
             </Button>
           </form>
         </Card>
-        <p className="mt-4 text-center text-xs text-ink-3">Forgot your password? Ask your admin to reset it.</p>
+        <p className="mt-4 text-center text-xs text-ink-3">Forgot your password? Ask your Notique contact to reset it.</p>
       </div>
     </main>
   );

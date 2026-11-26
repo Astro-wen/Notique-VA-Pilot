@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { CircleHelp, GraduationCap, LogOut, Settings2 } from "lucide-react";
+import { CircleHelp, GraduationCap, LogOut, Settings2, Workflow } from "lucide-react";
 import { useSession } from "./Session";
 import { replayTours } from "./Coach";
 
@@ -47,8 +47,11 @@ export function UserMenu() {
                 replayTours(profile.id, profile.role === "agent" ? "/agent" : "/va");
               }}
             >
-              <GraduationCap className="h-4 w-4" /> Replay tutorial
+              <GraduationCap className="h-4 w-4" /> Replay tour
             </button>
+            <Link className={item} href={profile.role === "va" ? "/va?view=how" : "/how"} onClick={() => setOpen(false)}>
+              <Workflow className="h-4 w-4" /> How it works
+            </Link>
             <Link className={item} href="/help" onClick={() => setOpen(false)}>
               <CircleHelp className="h-4 w-4" /> Help
             </Link>

@@ -89,8 +89,8 @@ export type Section =
 
 export const SECTIONS: { key: Section; label: string }[] = [
   { key: "decisions", label: "Decisions" },
-  { key: "budget", label: "Budget changes" },
-  { key: "needs", label: "Needs changes" },
+  { key: "budget", label: "Budget" },
+  { key: "needs", label: "Client needs" },
   { key: "questions", label: "Open questions" },
   { key: "risks", label: "Concerns and risks" },
   { key: "next_steps", label: "Next steps" },

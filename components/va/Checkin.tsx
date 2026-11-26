@@ -9,9 +9,9 @@ import type { VaNav } from "./Console";
 
 const KIND: Record<CheckinItem["kind"], { label: string; tone: Tone }> = {
   waiting: { label: "Needs their answer", tone: "warn" },
-  suggested: { label: "Suggested, not started", tone: "accent" },
+  suggested: { label: "Suggested, user has not decided", tone: "accent" },
   unreviewed: { label: "Delivered, no feedback", tone: "neutral" },
-  question: { label: "Open with the client", tone: "neutral" },
+  question: { label: "User still has to ask the client", tone: "neutral" },
 };
 
 /** Once a day the VA asks the user what is still open, and offers to take it over. */
@@ -120,7 +120,7 @@ export function Checkin({ nav }: { nav: VaNav }) {
         {data.doneToday ? <Badge tone="ok">Done today</Badge> : data.items.length ? <Badge tone="warn">Not done today</Badge> : null}
       </div>
       <p className="mt-0.5 max-w-3xl text-[13px] text-ink-3">
-        Once a day, ask {first} what is still open and offer to take it over. Send the message from your own phone or email, then log it here. When {first} says yes to something, open the ticket so it is tracked.
+        Once a day, ask {first} what is still open and offer to take it over. Three steps: edit the message, send it, mark it done. When {first} says yes to something, press the button on that item so it becomes a ticket.
       </p>
 
       {data.items.length === 0 ? (
@@ -152,10 +152,10 @@ export function Checkin({ nav }: { nav: VaNav }) {
                     {item.kind === "suggested" ? (
                       <>
                         <Button size="sm" busy={busy === item.id} onClick={() => act(item, "dismissTask")}>
-                          They will do it
+                          {first} will do it
                         </Button>
-                        <Button size="sm" variant="primary" busy={busy === item.id} onClick={() => act(item, "assignTask")}>
-                          They said take it
+                        <Button size="sm" busy={busy === item.id} onClick={() => act(item, "assignTask")}>
+                          {first} wants me to do it
                         </Button>
                       </>
                     ) : item.task_id ? (
@@ -192,12 +192,12 @@ export function Checkin({ nav }: { nav: VaNav }) {
               {data.reach.email || data.reach.sms ? (
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {data.reach.email ? (
-                    <Button size="sm" variant="primary" icon={<Send className="h-3.5 w-3.5" />} busy={busy === "send"} disabled={!message.trim()} onClick={() => send("email")}>
+                    <Button size="sm" icon={<Send className="h-3.5 w-3.5" />} busy={busy === "send"} disabled={!message.trim()} onClick={() => send("email")}>
                       Email {first}
                     </Button>
                   ) : null}
                   {data.reach.sms ? (
-                    <Button size="sm" variant="primary" icon={<Send className="h-3.5 w-3.5" />} busy={busy === "send"} disabled={!message.trim()} onClick={() => send("sms")}>
+                    <Button size="sm" icon={<Send className="h-3.5 w-3.5" />} busy={busy === "send"} disabled={!message.trim()} onClick={() => send("sms")}>
                       Text {first}
                     </Button>
                   ) : null}
@@ -209,10 +209,10 @@ export function Checkin({ nav }: { nav: VaNav }) {
                   Copy message
                 </Button>
                 <span className="flex-1" />
-                <Select aria-label="Sent by" className="!h-8 !w-auto" value={channel} onChange={(e) => setChannel(e.target.value)}>
-                  <option value="text">Sent by text</option>
-                  <option value="email">Sent by email</option>
-                  <option value="call">By call</option>
+                <Select aria-label="How did you send it?" className="!h-8 !w-auto" value={channel} onChange={(e) => setChannel(e.target.value)}>
+                  <option value="text">I sent it by text</option>
+                  <option value="email">I sent it by email</option>
+                  <option value="call">I called instead</option>
                 </Select>
                 <Button size="sm" variant="primary" icon={<Check className="h-3.5 w-3.5" />} busy={busy === "done"} onClick={markDone}>
                   {data.doneToday ? "Log again" : "Mark done for today"}
