@@ -42,7 +42,6 @@ export function TaskFormDialog({ open, onClose, projectId, task, onSaved, projec
     try {
       const saved = task ? await rpc<Task>("updateTask", { task_id: task.id, title, description, category }) : await rpc<Task>("createTask", { project_id: pid, title, description, category });
       onSaved(saved);
-      if (!task) toast("Sent to your assistant. You will see a delivery time once they start. Find it under Requests.");
       onClose();
     } catch (err) {
       // Someone else moved the request on while this was open. Keep what was typed and offer the next best path.
@@ -165,7 +164,7 @@ export function TaskCard({ taskId, vaName, tz, preview, startEditing, onClose, o
   const label = "text-xs font-semibold uppercase tracking-wide text-ink-3";
 
   return (
-    <Modal open={!!taskId} onClose={onClose} title={task ? `Request ${taskNo(task.number)}` : "Request"} wide>
+    <Modal open={!!taskId} onClose={onClose} title="Your request" wide>
       {error && !data ? <ErrorNote message={error} onRetry={() => reload()} /> : null}
       {loading && !data ? <Spinner /> : null}
       {task && status ? (
@@ -235,7 +234,7 @@ export function TaskCard({ taskId, vaName, tz, preview, startEditing, onClose, o
               </div>
               {task.status === "delivered" && !preview ? (
                 <div className="mt-3 rounded-lg bg-page p-3">
-                  <p className="text-[13px] font-medium">{task.agent_feedback ? `You said: ${FEEDBACK_LABEL[task.agent_feedback]}` : deliverables.some(isShortText) ? "Read it above. You send it to your client yourself. Then tell us how it went." : "Open it above. You send it to your client yourself. Then tell us how it went."}</p>
+                  <p className="text-[13px] font-medium">{task.agent_feedback ? `You said: ${FEEDBACK_LABEL[task.agent_feedback]}` : deliverables.some(isShortText) ? `Read it above. You send it to your client yourself. Then tell ${vaName} how it went.` : `Open it above. You send it to your client yourself. Then tell ${vaName} how it went.`}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {(["used_as_is", "edited", "not_used"] as const).map((f) => (
                       <Button key={f} size="sm" variant={task.agent_feedback === f ? "primary" : "outline"} busy={busy === f} onClick={() => run(f, "setTaskFeedback", { feedback: f }, "Thanks, noted.")}>

@@ -286,8 +286,8 @@ export const TOURS = {
     { target: "nav-tasks", title: "Tickets: work the user asked for", body: "The user calls these requests. Open one to set an ETA, finish the AI's first draft, and deliver. If the user asks for something by text, email or phone, use Log a request there so it is tracked." },
     { target: "nav-checkin", title: "Check-in: once a day", body: "A ready message asking the user what is still open and offering to take it over. Edit it, send it, mark it done." },
     { target: "nav-sources", title: "Data sources", body: "Every way a conversation can come in, with an upload button for each." },
+    { target: "nav-qc", title: "Quality review", body: "Your numbers: how many AI drafts you approved, edited, or declined, and what the user did with your deliverables." },
     { target: "nav-how", title: "How it works", body: "A one-page picture of the whole flow: who does what at each step, and where you and the user hand work to each other." },
-    { target: "nav-qc", title: "QC review", body: "Your numbers: how many AI drafts you approved, edited, or declined, and what the user did with your deliverables." },
     { target: "user-menu", title: "Help lives here", body: "Replay this tour, open Help, or sign out." },
   ],
   vaVerify: [
@@ -311,6 +311,8 @@ export const TOURS = {
     { title: "Welcome to Notique", body: "Your assistant turns each client conversation into checked notes and follow-up work. Here is where things are." },
     { target: "add-conversation", title: "Start here", body: "After a meeting, add the recording, a transcript, a text thread, or a written note." },
     { target: "new-task", title: "Submit a request", body: "Need research, a comparison, or a draft? Ask your assistant here." },
+    { target: "home-waiting", title: "Waiting on you", body: "Anything that needs you, across all clients: a question from your assistant, a delivery to review, or a suggested follow-up to send or skip." },
+    { target: "home-with", title: "With your assistant", body: "Everything your assistant is working on for you, and when to expect it." },
     { target: "project-list", title: "One project per client", body: "Open a client to see what was decided, what changed, and what is still open." },
     { target: "user-menu", title: "Help lives here", body: "Replay this tour or open Help any time." },
   ],
@@ -319,7 +321,7 @@ export const TOURS = {
     { target: "tab-status", title: "Deal status", body: "Facts your assistant checked against the recording: decisions, budget, client needs, open questions, risks. Tap a source to read the exact quote." },
     { target: "tab-timeline", title: "Timeline", body: "Each conversation by day, with a short summary of what happened." },
     { target: "tab-tasks", title: "Requests", body: "Suggested follow-up work appears here. Send what you want done, edit it first, or write your own. When something is delivered, open it and say if you used it. Your assistant never contacts your clients." },
-    { target: "tab-files", title: "Files", body: "Everything delivered to you, plus documents you share with your assistant." },
+    { target: "tab-files", title: "Files", body: "Every file in one place: what your assistant delivered, labeled with its request, plus documents you shared." },
     { target: "add-conversation", title: "After every meeting", body: "Add the recording or your notes here. Checked results arrive by 9:00 AM the next business day." },
   ],
   admin: [

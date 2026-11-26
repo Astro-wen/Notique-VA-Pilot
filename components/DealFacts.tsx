@@ -70,7 +70,7 @@ export function DealFacts({ facts, tz, onResolve }: { facts: Fact[]; tz?: string
         const rows = facts.filter((f) => f.section === s.key);
         if (rows.length === 0) return null;
         return (
-          <section key={s.key} className="rounded-xl border border-line bg-white px-4 pt-3">
+          <section key={s.key} id={`section-${s.key}`} className="scroll-mt-4 rounded-xl border border-line bg-white px-4 pt-3">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-3">{s.label}</h3>
             <div className="divide-y divide-line">
               {rows.map((f) => (

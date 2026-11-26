@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { FAIR_HOUSING_HELP, PROTECTED } from "../fairHousing";
+import { fairHousingMessage, flaggedWord } from "../fairHousing";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { after } from "next/server";
 import { BUCKET, db } from "./supabase";
@@ -517,7 +517,7 @@ async function projectList(agentId: string): Promise<ProjectListItem[]> {
   if (projects.length === 0) return [];
   const ids = projects.map((p) => p.id);
   const events = q(await db().from("events").select("project_id,status,occurred_at,due_at").in("project_id", ids)) as any[];
-  const tasks = q(await db().from("tasks").select("project_id,status,agent_feedback").in("project_id", ids)) as any[];
+  const tasks = q(await db().from("tasks").select("id,project_id,status,agent_feedback,title,eta,assigned_at").in("project_id", ids)) as any[];
   return projects.map((p) => {
     const ev = events.filter((e) => e.project_id === p.id);
     const last = ev.map((e) => e.occurred_at).sort().pop() ?? null;
@@ -531,6 +531,9 @@ async function projectList(agentId: string): Promise<ProjectListItem[]> {
       needs_answer: tasks.filter((t) => t.project_id === p.id && t.status === "waiting").length,
       suggested: tasks.filter((t) => t.project_id === p.id && t.status === "suggested").length,
       in_progress: tasks.filter((t) => t.project_id === p.id && ["received", "in_progress"].includes(t.status)).length,
+      with_assistant: tasks
+        .filter((t) => t.project_id === p.id && ["received", "in_progress"].includes(t.status))
+        .map((t) => ({ id: t.id, title: t.title, eta: t.eta ?? null, status: t.status, sent_at: t.assigned_at ?? null })),
       failed_events: ev.filter((e) => e.status === "failed").length,
       last_activity: last,
     };
@@ -838,6 +841,7 @@ async function writeDraft(task: Task, instructions: string | null): Promise<void
       facts: facts.map((f) => `${f.section}: ${f.statement}`),
       thread: thread.map((m) => `${m.sender_role === "agent" ? "User" : "Assistant"}: ${m.body}`),
       instructions,
+      agentName: ((q(await db().from("profiles").select("name").eq("id", project.agent_id).maybeSingle()) as { name: string } | null)?.name ?? "").split(" ")[0] || null,
     });
     // Only the run that started last may write, so a slow older run cannot replace a newer draft.
     await db().from("task_drafts").update({ status: "ready", body: out.body, gaps: out.gaps, sources: out.sources, model: out.model, error: null, edited_at: null, updated_at: new Date().toISOString() }).eq("task_id", task.id).eq("updated_at", started);
@@ -1659,8 +1663,8 @@ export const handlers: Record<string, Handler> = {
     if (verdict === "approved" && fact.origin === "ai" && fact.ai_statement) {
       patch.statement = fact.ai_statement;
     }
-    if ((verdict === "approved" || verdict === "edited") && PROTECTED.test(String(patch.statement ?? fact.statement))) {
-      throw new RpcError(FAIR_HOUSING_HELP);
+    if ((verdict === "approved" || verdict === "edited") && !!flaggedWord(String(patch.statement ?? fact.statement))) {
+      throw new RpcError(fairHousingMessage(String(patch.statement ?? fact.statement)));
     }
     if (verdict === "pending") {
       patch.statement = fact.origin === "ai" && fact.ai_statement ? fact.ai_statement : fact.statement;
@@ -1749,7 +1753,7 @@ export const handlers: Record<string, Handler> = {
       for (const key of ["consent", "pii", "fair_housing", "type_match"]) if (typeof args.checks[key] === "boolean") checks[key] = args.checks[key];
     }
     const missing = (["consent", "pii", "fair_housing", "type_match"] as const).filter((k) => !checks[k]);
-    if (event.summary && PROTECTED.test(event.summary)) throw new RpcError("Reword the summary first. It may mention a protected characteristic such as family, age, religion, disability or military service.");
+    if (event.summary && !!flaggedWord(event.summary)) throw new RpcError(`Reword the summary first. "${flaggedWord(event.summary)}" may describe a person rather than the property.`);
     if (missing.length) throw new RpcError("Confirm all four checks at the top of the page before submitting.");
     const precheck = q(await db().from("facts").select("verdict").eq("event_id", event.id)) as any[];
     const waiting = precheck.filter((f) => f.verdict === "pending").length;
@@ -2014,6 +2018,12 @@ export const handlers: Record<string, Handler> = {
       if (!["in_progress", "waiting"].includes(task.status)) throw new RpcError(task.status === "received" ? "Set an ETA before you start the timer." : "The timer only runs while a task is in progress.");
       patch = task.timer_started_at ? {} : { timer_started_at: new Date().toISOString() };
       if (task.status === "waiting") patch.status = "in_progress";
+    } else if (args.action === "add") {
+      // For work done before the timer was started. Kept to a sane range.
+      const minutes = Math.round(Number(args.minutes));
+      if (!Number.isFinite(minutes) || minutes < 1 || minutes > 600) throw new RpcError("Enter the minutes you worked, between 1 and 600.");
+      if (["cancelled", "dismissed", "suggested"].includes(task.status)) throw new RpcError("Time can only be added to an open or delivered ticket.");
+      patch = { logged_ms: Number(task.logged_ms) + minutes * 60 * 1000 };
     } else {
       patch = pauseTimerPatch(task);
     }

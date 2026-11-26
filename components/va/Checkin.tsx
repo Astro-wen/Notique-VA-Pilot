@@ -187,7 +187,7 @@ export function Checkin({ nav }: { nav: VaNav }) {
                 }}
               />
               <p className="mt-1.5 text-xs text-ink-3">
-                {data.reach.email || data.reach.sms ? `Edit it to sound like you, then send it from here${data.reach.email && data.reach.sms ? "" : data.reach.email ? " by email" : " by text"}, or copy it and send it yourself.` : "Edit it to sound like you. Copy it and send it from your own phone or email, then mark it done."}
+                {data.reach.email || data.reach.sms ? `Edit it to sound like you, then send it from here${data.reach.email && data.reach.sms ? "" : data.reach.email ? " by email" : " by text"}, or copy it and send it yourself.` : `Edit it to sound like you. Copy it and send it to ${first} from your own phone or email (only to ${first}, never to a client), then mark it done.`}
               </p>
               {data.reach.email || data.reach.sms ? (
                 <div className="mt-3 flex flex-wrap items-center gap-2">

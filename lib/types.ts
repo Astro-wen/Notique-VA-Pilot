@@ -351,6 +351,8 @@ export interface ProjectListItem extends Project {
   suggested?: number;
   /** Requests the VA is working on, not waiting on the user. */
   in_progress?: number;
+  /** Requests the assistant has, for the list across clients on the home screen. */
+  with_assistant?: { id: string; title: string; eta: string | null; status: string; sent_at: string | null }[];
   /** Uploads that could not be read. */
   failed_events?: number;
   pending_events: number;

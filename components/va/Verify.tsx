@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, CircleHelp, Flag, Pencil, Plus, Quote, RotateCcw, Search, Timer, Trash2, X } from "lucide-react";
 import { rpc } from "@/lib/client/api";
-import { FAIR_HOUSING_HELP, PROTECTED } from "@/lib/fairHousing";
+import { fairHousingMessage, flaggedWord } from "@/lib/fairHousing";
 import { SOURCE_LABEL, clock, dateTime, plainDate, remaining, followUpText } from "@/lib/client/format";
 import { SECTIONS, TASK_CATEGORIES, type EventChecks, type EventDetail, type Fact, type Section, type SuggestedTask, type Verdict } from "@/lib/types";
 import { Badge, Button, ErrorNote, Field, IconButton, Input, Kbd, Modal, Select, Spinner, Textarea, composing, cx, isTyping, useBackGuard, useToast } from "../ui";
@@ -129,6 +129,17 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
   useBackGuard(!!editId || summaryDraft !== null || !!adding, () => toast("You have an edit open. Save it or cancel it before leaving.", { tone: "error" }));
   const checkQueue = useRef<Promise<unknown>>(Promise.resolve());
   const settleQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const lastInput = useRef<"key" | "mouse">("mouse");
+  useEffect(() => {
+    const onKey = () => (lastInput.current = "key");
+    const onPointer = () => (lastInput.current = "mouse");
+    window.addEventListener("keydown", onKey, true);
+    window.addEventListener("pointerdown", onPointer, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("pointerdown", onPointer, true);
+    };
+  }, []);
   const saving = useRef<Record<string, Promise<boolean>>>({});
   const audioRef = useRef<HTMLAudioElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -233,14 +244,15 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
     const next = rest.find((f) => f.verdict === "pending");
     if (next) {
       setFocusId(next.id);
-      document.getElementById(`fact-${next.id}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      // Scroll only for keyboard work. With a mouse, moving the page would put a different button under the pointer.
+      if (lastInput.current === "key") document.getElementById(`fact-${next.id}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
   }
 
   async function decide(fact: Fact, verdict: Verdict, extra: Record<string, unknown> = {}): Promise<boolean> {
     if (readOnly) return false;
-    if ((verdict === "approved" || verdict === "edited") && PROTECTED.test(typeof extra.statement === "string" ? extra.statement : fact.statement)) {
-      toast(FAIR_HOUSING_HELP, { tone: "error" });
+    if ((verdict === "approved" || verdict === "edited") && !!flaggedWord(typeof extra.statement === "string" ? extra.statement : fact.statement)) {
+      toast(fairHousingMessage(typeof extra.statement === "string" ? extra.statement : fact.statement), { tone: "error" });
       return false;
     }
     if (verdict === "approved" && fact.origin === "ai" && fact.confidence !== null && fact.confidence < 0.6) {
@@ -281,7 +293,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
     if (!draft.statement.trim()) return toast("The statement cannot be empty.", { tone: "error" });
     const canTask = draft.section === "questions" || draft.section === "next_steps";
     if (canTask && draft.withTask && !draft.task.title.trim()) return toast("Give the suggested request a title, or untick it.", { tone: "error" });
-    if (PROTECTED.test(draft.statement)) return toast(FAIR_HOUSING_HELP, { tone: "error" });
+    if (!!flaggedWord(draft.statement)) return toast(fairHousingMessage(draft.statement), { tone: "error" });
     const unchanged = draft.statement.trim() === (fact.ai_statement ?? fact.statement).trim();
     const kept = draft;
     setEditId(null);
@@ -741,7 +753,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
               ) : (
                 <p className="mt-1 text-[13px] text-ink-2">{event.summary || "No summary yet. Add one or two sentences on what happened."}</p>
               )}
-              {event.summary && PROTECTED.test(event.summary) && summaryDraft === null ? <p className="mt-1 text-xs font-medium text-bad">This summary may mention a protected characteristic. Reword it before you submit.</p> : null}
+              {event.summary && !!flaggedWord(event.summary) && summaryDraft === null ? <p className="mt-1 text-xs font-medium text-bad">&quot;{flaggedWord(event.summary)}&quot; may describe a person rather than the property. Reword the summary before you submit.</p> : null}
               {!readOnly ? <p className="mt-1 text-xs text-ink-3">The user sees this on their timeline once you submit. Fix anything that is wrong.</p> : null}
             </div>
             {facts.length === 0 ? (
@@ -778,9 +790,9 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                             {f.origin === "va" ? <Badge tone="dark">Added by you</Badge> : f.change_type === "changed" ? <Badge tone="warn" className="!whitespace-normal">Changed{f.changed_from ? ` from ${f.changed_from}` : ""}</Badge> : <Badge>New</Badge>}
                             {conf ? <Badge tone={conf.tone}>{conf.text}</Badge> : null}
                             {done ? <Badge tone={VERDICT_TONE[f.verdict]}>{VERDICT_LABEL[f.verdict]}</Badge> : null}
-                            {f.verdict !== "declined" && PROTECTED.test(f.statement) ? (
+                            {f.verdict !== "declined" && !!flaggedWord(f.statement) ? (
                               <span title="This wording may describe a protected characteristic such as family status, age, religion, disability, or military status. Rewrite it as a property requirement, or decline it.">
-                                <Badge tone="bad">Fair housing: reword or decline</Badge>
+                                <Badge tone="bad">Fair housing: &quot;{flaggedWord(f.statement)}&quot;, reword or decline</Badge>
                               </span>
                             ) : null}
                           </div>
@@ -812,6 +824,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                                     <input type="checkbox" className="h-4 w-4 accent-[#0d0d0d]" checked={draft.withTask} onChange={(e) => setDraft({ ...draft, withTask: e.target.checked })} />
                                     Suggest a request to the user
                                   </label>
+                                  <p className="mt-1 text-xs text-ink-3">If {nav.agent.name.split(" ")[0]} already asked you for this by text or email, untick it and use Log a request on Tickets instead, so it is not suggested twice.</p>
                                   {draft.withTask ? (
                                     <div className="mt-2 space-y-2">
                                       <Input aria-label="Task title" placeholder="Compare HOA fees for the three shortlisted condos" value={draft.task.title} onChange={(e) => setDraft({ ...draft, task: { ...draft.task, title: e.target.value } })} />
@@ -880,7 +893,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                                   </div>
                                 ) : (
                                   <div className="mt-3 flex flex-wrap gap-2">
-                                    {(f.origin === "ai" && f.confidence !== null && f.confidence < 0.6) || PROTECTED.test(f.statement) ? (
+                                    {(f.origin === "ai" && f.confidence !== null && f.confidence < 0.6) || !!flaggedWord(f.statement) ? (
                                       <Button size="sm" variant="primary" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => startEdit(f)} title="The AI is not sure about this one. Read the quote, fix the wording, then save to approve it.">
                                         Edit and approve {focused ? <Kbd>E</Kbd> : null}
                                       </Button>
@@ -950,8 +963,8 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                     toast("You have an edit open. Save or cancel it before you submit.", { tone: "error" });
                     return;
                   }
-                  if (event.summary && PROTECTED.test(event.summary)) {
-                    toast("Reword the summary first. It may mention a protected characteristic.", { tone: "error" });
+                  if (event.summary && !!flaggedWord(event.summary)) {
+                    toast(`Reword the summary first. "${flaggedWord(event.summary)}" may describe a person rather than the property.`, { tone: "error" });
                     return;
                   }
                   if (!checksDone) {

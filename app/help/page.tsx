@@ -62,7 +62,7 @@ function Help() {
   const router = useRouter();
   const { me } = useSession();
   const mine: HelpRole = me?.profile.role === "agent" ? "agent" : me?.profile.role === "admin" ? "admin" : "va";
-  const sections: HelpRole[] = mine === "admin" ? ["admin", "va"] : [mine];
+  const sections: HelpRole[] = mine === "admin" ? ["va", "admin"] : [mine];
   return (
     <div className="min-h-screen">
       <header className="flex h-14 items-center gap-3 border-b border-line bg-white px-4">

@@ -165,8 +165,8 @@ export function Queue({ nav }: { nav: VaNav }) {
             <table className="w-full min-w-[760px] text-left text-sm">
               <thead className="text-xs text-ink-3">
                 <tr className="border-b border-line">
-                  <th className="px-4 py-2 font-medium">Conversation</th>
-                  <th className="px-3 py-2 font-medium">Project</th>
+                  <th className="px-4 py-2 font-medium">Client</th>
+                  <th className="px-3 py-2 font-medium">Conversation</th>
                   <th className="px-3 py-2 font-medium">Source</th>
                   <th className="px-3 py-2 font-medium">Received</th>
                   <th className="px-3 py-2 font-medium">Due</th>
@@ -178,15 +178,15 @@ export function Queue({ nav }: { nav: VaNav }) {
                 {data.events.map((e, i) => (
                   <tr key={e.id} className="hover:bg-[#fafafa]">
                     <td className="px-4 py-3">
-                      <button className="text-left font-medium hover:text-accent" onClick={() => nav.go("event", { id: e.id })}>
+                      <button className="font-medium text-ink hover:text-accent" onClick={() => nav.go("project", { id: e.project_id })}>
+                        {e.project_name}
+                      </button>
+                    </td>
+                    <td className="px-3 py-3">
+                      <button className="text-left text-accent hover:underline" onClick={() => nav.go("event", { id: e.id })}>
                         {e.title}
                       </button>
                       {e.status === "in_review" && e.resolved_count > 0 ? <div className="text-xs text-ink-3">Started, {e.resolved_count} of {e.fact_count} decided</div> : null}
-                    </td>
-                    <td className="px-3 py-3">
-                      <button className="text-accent hover:underline" onClick={() => nav.go("project", { id: e.project_id })}>
-                        {e.project_name}
-                      </button>
                     </td>
                     <td className="px-3 py-3 text-ink-2">{SOURCE_LABEL[e.source]}</td>
                     <td className="px-3 py-3 text-ink-2">{ago(e.created_at)}</td>

@@ -20,6 +20,7 @@ function How() {
       <main className="mx-auto max-w-[1500px] px-4 py-6">
         <h1 className="text-xl font-semibold">How Notique works</h1>
         <p className="mt-1 max-w-3xl text-sm text-ink-2">One conversation goes in at step 1. A finished follow-up comes out at step 6. AI does the first pass at each step, a human assistant checks it, and the user is only asked for a tap.</p>
+        {role === "agent" ? <p className="mt-2 max-w-3xl text-sm text-ink-2">In this picture, User means you, and VA means your assistant.</p> : null}
         <div className="mt-5">
           <HowItWorks role={role} />
         </div>

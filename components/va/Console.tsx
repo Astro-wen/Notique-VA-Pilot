@@ -32,7 +32,7 @@ const NAV: { key: VaView; label: string; icon: React.ReactNode; also?: VaView[] 
   { key: "tasks", label: "Tickets", icon: <ClipboardList className="h-4 w-4" /> },
   { key: "checkin", label: "Check-in", icon: <MessagesSquare className="h-4 w-4" /> },
   { key: "sources", label: "Data sources", icon: <DatabaseZap className="h-4 w-4" /> },
-  { key: "qc", label: "QC review", icon: <BarChart3 className="h-4 w-4" /> },
+  { key: "qc", label: "Quality review", icon: <BarChart3 className="h-4 w-4" /> },
   { key: "how", label: "How it works", icon: <Workflow className="h-4 w-4" /> },
 ];
 

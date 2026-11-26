@@ -3,11 +3,11 @@ import { useEffect, useState } from "react";
 import { BadgeCheck, ChevronRight, Clock, FileText, Plus, Radar, Sparkles } from "lucide-react";
 import { rpc } from "@/lib/client/api";
 import { SOURCE_LABEL, dateOnly, dateTime, isPast, projectLine } from "@/lib/client/format";
-import type { EventRow, Fact, ProjectDetail, Task } from "@/lib/types";
+import { SECTIONS, type EventRow, type Fact, type ProjectDetail, type Task } from "@/lib/types";
 import { AddEventDialog } from "../AddEventDialog";
 import { DealFacts, FactRow } from "../DealFacts";
 import { AddFile, FileItem } from "../FileList";
-import { Badge, Button, Card, Empty, ErrorNote, Spinner, Tabs, useLoad, useToast } from "../ui";
+import { Badge, Button, Card, Empty, ErrorNote, Spinner, Tabs, cx, useLoad, useToast } from "../ui";
 import { AGENT_STATUS, TaskCard, TaskFormDialog } from "./TaskCard";
 import { Coach, TOURS } from "../Coach";
 
@@ -42,11 +42,12 @@ function TaskRow({ task, tz, onOpen, children }: { task: Task; tz: string; onOpe
   );
 }
 
-export function AgentProject({ projectId, preview, onBack }: { projectId: string; preview?: boolean; onBack?: () => void }) {
+export function AgentProject({ projectId, preview, onBack, openRequest }: { projectId: string; preview?: boolean; onBack?: () => void; openRequest?: string | null }) {
   const toast = useToast();
   const { data, error, loading, reload } = useLoad(() => rpc<ProjectDetail>("getProject", { project_id: projectId, as_agent: true }), [projectId], { refreshMs: 30000 });
-  const [tab, setTab] = useState<Tab>("status");
-  const [taskId, setTaskId] = useState<string | null>(null);
+  // Arriving from Submit a request opens that request, so it is clear where it went.
+  const [tab, setTab] = useState<Tab>(openRequest ? "tasks" : "status");
+  const [taskId, setTaskId] = useState<string | null>(openRequest ?? null);
   const [editFirst, setEditFirst] = useState(false);
   const [newTask, setNewTask] = useState(false);
   const [add, setAdd] = useState(false);
@@ -225,7 +226,31 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
               />
             </Card>
           ) : (
-            <DealFacts facts={data.facts} tz={tz} onResolve={preview ? undefined : resolve} />
+            <>
+              {(() => {
+                // A short top line for a long page: what happened last, and a jump to each section.
+                const latest = [...data.events].filter((e) => e.status === "submitted" && e.summary).sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))[0];
+                const counts = SECTIONS.map((s) => ({ ...s, n: data.facts.filter((f) => f.section === s.key).length })).filter((s) => s.n > 0);
+                return (
+                  <Card className="mb-4 p-3.5">
+                    {latest ? (
+                      <>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-ink-3">Latest, {dateOnly(latest.occurred_at, tz)}</div>
+                        <p className="mt-1 text-[13px] text-ink-2">{latest.summary}</p>
+                      </>
+                    ) : null}
+                    <div className={cx("flex flex-wrap gap-1.5", latest && "mt-2.5")}>
+                      {counts.map((s) => (
+                        <button key={s.key} className="rounded-full border border-line px-2.5 py-1 text-xs text-ink-2 hover:bg-page" onClick={() => document.getElementById(`section-${s.key}`)?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+                          {s.label} {s.n}
+                        </button>
+                      ))}
+                    </div>
+                  </Card>
+                );
+              })()}
+              <DealFacts facts={data.facts} tz={tz} onResolve={preview ? undefined : resolve} />
+            </>
           )}
         </div>
       ) : null}
@@ -416,9 +441,11 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
         open={newTask}
         onClose={() => setNewTask(false)}
         projectId={projectId}
-        onSaved={() => {
+        onSaved={(t) => {
           reload(true);
-          toast(`Sent to ${vaName}.`);
+          toast(`Sent to ${vaName}. You will see a delivery time once they start.`);
+          setTab("tasks");
+          setTaskId(t.id);
         }}
       />
       <AddEventDialog

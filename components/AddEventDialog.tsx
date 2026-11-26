@@ -186,7 +186,7 @@ export function AddEventDialog({ open, onClose, projects, agentId, defaultProjec
       wide
       footer={
         <>
-          {busy ? <span className="mr-auto text-[13px] text-ink-3">{busy}</span> : null}
+          {busy ? <span className="mr-auto w-full text-[13px] text-ink-3 sm:w-auto sm:flex-1">{busy}</span> : null}
           <Button onClick={onClose} disabled={!!busy}>
             Cancel
           </Button>

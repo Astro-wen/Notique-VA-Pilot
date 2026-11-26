@@ -103,6 +103,7 @@ function AgentApp() {
         {projectId ? (
           <AgentProject
             projectId={projectId}
+            openRequest={params.get("request")}
             onBack={() => {
               router.push("/agent");
               reload(true);
@@ -136,7 +137,7 @@ function AgentApp() {
             {loading && !data ? <Spinner /> : null}
             {data && data.some((p) => p.needs_answer || p.to_review || p.suggested) ? (
               // One place that answers "what is waiting on me", across every client.
-              <Card className="mt-5 p-3.5">
+              <Card className="mt-5 p-3.5" data-tour="home-waiting">
                 <div className="text-xs font-semibold uppercase tracking-wide text-ink-3">Waiting on you</div>
                 <ul className="mt-1.5 divide-y divide-line">
                   {data
@@ -157,6 +158,29 @@ function AgentApp() {
                             </span>
                           </span>
                           <span className="text-[13px] font-medium text-accent">Open</span>
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              </Card>
+            ) : null}
+            {data && data.some((p) => p.with_assistant?.length) ? (
+              // Everything the assistant is working on, across clients, with when to expect it.
+              <Card className="mt-4 p-3.5" data-tour="home-with">
+                <div className="text-xs font-semibold uppercase tracking-wide text-ink-3">With {me?.assistant?.split(" ")[0] ?? "your assistant"}</div>
+                <ul className="mt-1.5 divide-y divide-line">
+                  {data
+                    .flatMap((p) => (p.with_assistant ?? []).map((t) => ({ ...t, project_id: p.id, client: p.client_name })))
+                    .sort((a, b) => (a.eta ?? "9999").localeCompare(b.eta ?? "9999"))
+                    .map((t) => (
+                      <li key={t.id}>
+                        <button className="flex w-full items-center gap-3 py-2.5 text-left" onClick={() => router.push(`/agent?project=${t.project_id}&request=${t.id}`)}>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium">{t.title}</span>
+                            <span className="block truncate text-[13px] text-ink-2">
+                              {t.client}, {t.eta ? (isPast(t.eta) ? `was expected ${dateTime(t.eta, me?.profile.timezone)}` : `expected ${dateTime(t.eta, me?.profile.timezone)}`) : t.sent_at ? `sent ${dateTime(t.sent_at, me?.profile.timezone)}, not started yet` : "not started yet"}
+                            </span>
+                          </span>
                         </button>
                       </li>
                     ))}
@@ -205,7 +229,7 @@ function AgentApp() {
         onSaved={(t) => {
           reload(true);
           toast("Sent to your assistant. You will see a delivery time once they start.");
-          router.push(`/agent?project=${t.project_id}`);
+          router.push(`/agent?project=${t.project_id}&request=${t.id}`);
         }}
       />
       <NewProject

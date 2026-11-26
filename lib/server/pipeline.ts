@@ -581,20 +581,23 @@ const DRAFT_PROMPT = `You prepare the first draft of a deliverable for a real es
 Rules:
 1. Use only the verified facts given about this client and deal. Never invent addresses, prices, listings, names, dates, or numbers.
 2. Where something is needed that you do not have, write a bracketed placeholder in the text, for example [ADD: three comparable sales near Maple St], and list it in "gaps".
-3. Write the deliverable itself, ready to edit: an email or message in the agent's voice, a checklist, a comparison outline, a call script, or a short research brief, whichever the request calls for.
+3. Write the deliverable itself, ready to edit: an email or message in the agent's voice, a checklist, a comparison outline, a call script, or a short research brief, whichever the request calls for. For research (sales, listings, rules, numbers), write the finished brief the assistant will hand to the agent: headings and rows for the findings, with [ADD: ...] where the assistant must fill in what they look up. Never write a message asking the agent, the client, or anyone else to gather the information.
+7. Sign messages with the agent's first name given as "agent". Never write [ADD: agent name].
+8. "gaps" lists only what this request needs looked up or confirmed. Do not add items from other topics in the deal profile.
 4. Plain text. Short paragraphs. No markdown symbols. Under 350 words.
 5. Fair housing: never mention or steer on race, color, religion, national origin, sex, disability, familial status, age, or military status. Describe properties and requirements, not people.
 6. No pressure tactics and no promises about the market.
 Return only JSON: {"draft": "...", "gaps": ["..."]}`;
 
 /** Drafts a ticket's deliverable from the verified deal profile. */
-export async function draftDeliverable(input: { title: string; description: string; category: string; clientName: string; dealType: string; area: string | null; budget: string | null; facts: string[]; thread: string[]; instructions?: string | null }): Promise<DraftResult> {
+export async function draftDeliverable(input: { title: string; description: string; category: string; clientName: string; dealType: string; area: string | null; budget: string | null; facts: string[]; thread: string[]; instructions?: string | null; agentName?: string | null }): Promise<DraftResult> {
   const raw = (await chatJson([
     { role: "system", content: DRAFT_PROMPT },
     {
       role: "user",
       content: JSON.stringify({
         request: { title: input.title, details: input.description, category: input.category },
+        agent: input.agentName ?? null,
         client: { name: input.clientName, deal: input.dealType, area: input.area, budget: input.budget },
         verified_facts: input.facts.slice(0, 40),
         messages_on_this_ticket: input.thread.slice(-8),

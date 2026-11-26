@@ -421,7 +421,7 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
           </div>
         ) : null}
         <div className="overflow-y-auto px-5 py-4">{children}</div>
-        {footer ? <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">{footer}</div> : null}
+        {footer ? <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3">{footer}</div> : null}
       </div>
     </div>
   );

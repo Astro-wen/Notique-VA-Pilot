@@ -93,9 +93,8 @@ export function NewTicketDialog({ open, onClose, projectId, onCreated, projects,
         </>
       }
     >
-      <p className="text-[13px] text-ink-3">Log every piece of work the user asks for by text, email, or call, so nothing is lost and the deadline is tracked. The user sees this ticket as a request.</p>
       <div className="mt-4 space-y-4">
-        <p className="-mt-1 text-[13px] text-ink-3">Use this when {userName?.split(" ")[0] ?? "the user"} asks for something by text, email or phone, so it is tracked and the deadline counts.</p>
+        <p className="-mt-1 text-[13px] text-ink-3">Use this when {userName?.split(" ")[0] ?? "the user"} asks for something by text, email or phone, so nothing is lost. {userName?.split(" ")[0] ?? "The user"} sees it as a request. Set the ETA on the ticket next.</p>
         {projects ? (
           <Field label="Client">
             <Select value={pid} onChange={(e) => setPid(e.target.value)}>
@@ -160,6 +159,7 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
   const [eta, setEta] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<"deliver" | "cancel" | null>(null);
+  const [manualMinutes, setManualMinutes] = useState("");
   const [assignVia, setAssignVia] = useState("text");
   const task = data?.task;
   const now = useNow(!!task?.timer_started_at);
@@ -408,6 +408,37 @@ export function Ticket({ nav, taskId, onChanged }: { nav: VaNav; taskId: string;
             ? `${nav.agent.name} will see ${deliverables.length} ${deliverables.length === 1 ? "deliverable" : "deliverables"} and the timer stops at ${clock(logged)}. ${nav.agent.name.split(" ")[0]} sends this to the client. Make sure it does not read as if it was already sent.`
             : "The user sees it as cancelled. Use this only if the user no longer needs it."}
         </p>
+        {confirm === "deliver" && logged < 60 * 1000 ? (
+          // Time is how the pilot measures the work, so a forgotten timer is worth one question.
+          <div className="mt-3 rounded-lg bg-warn-soft px-3 py-2.5 text-[13px] text-ink-2">
+            <div className="font-medium text-ink">No time is logged. How many minutes did this take?</div>
+            <div className="mt-2 flex items-center gap-2">
+              <Input className="!h-8 w-24" type="number" min={1} max={600} inputMode="numeric" aria-label="Minutes worked" value={manualMinutes} onChange={(e) => setManualMinutes(e.target.value)} />
+              <Button
+                size="sm"
+                disabled={!manualMinutes || busy !== null}
+                busy={busy === "time"}
+                onClick={async () => {
+                  // Stays in the deliver dialog: only the time is added.
+                  setBusy("time");
+                  try {
+                    await rpc("taskTimer", { task_id: taskId, action: "add", minutes: Number(manualMinutes) });
+                    setManualMinutes("");
+                    toast("Time added.");
+                    await reload(true);
+                  } catch (err) {
+                    toast((err as Error).message, { tone: "error" });
+                  } finally {
+                    setBusy(null);
+                  }
+                }}
+              >
+                Add time
+              </Button>
+            </div>
+            <p className="mt-1.5 text-xs text-ink-3">Next time, press Start when you begin work.</p>
+          </div>
+        ) : null}
       </Modal>
     </div>
   );
