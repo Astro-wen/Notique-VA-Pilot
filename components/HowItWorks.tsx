@@ -164,7 +164,7 @@ export function HowItWorks({ role }: { role: "agent" | "va" | "admin" }) {
     const box = scroller.current;
     if (stage === null || !box || box.scrollWidth <= box.clientWidth) return;
     const scale = box.scrollWidth / W;
-    box.scrollTo({ left: Math.max(0, (bx(stage) - 40) * scale), behavior: "smooth" });
+    box.scrollLeft = Math.max(0, (bx(stage) - 40) * scale);
   }, [stage]);
   const lit = (stages: number[]) => stage === null || stages.includes(stage);
   const info = stage !== null ? STAGES[stage] : null;
