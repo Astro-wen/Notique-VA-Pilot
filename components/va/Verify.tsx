@@ -58,20 +58,27 @@ const OPEN_LABEL: Record<string, string> = { questions: "Open question", risks: 
 function SettlesPanel({ items, settles, readOnly, onChange }: { items: NonNullable<EventDetail["openItems"]>; settles: string[]; readOnly: boolean; onChange: (next: string[]) => void }) {
   const picked = new Set(settles);
   const [open, setOpen] = useState(settles.length > 0);
+  // The AI's picks first, then by section. The order is set once, so nothing moves while the VA ticks.
+  const [order] = useState(() => {
+    const first = new Set(settles);
+    const rank: Record<string, number> = { questions: 0, risks: 1, next_steps: 2 };
+    return [...items].sort((a, b) => Number(first.has(b.id)) - Number(first.has(a.id)) || (rank[a.section] ?? 3) - (rank[b.section] ?? 3)).map((i) => i.id);
+  });
+  const sorted = [...items].sort((a, b) => (order.indexOf(a.id) + 1 || 999) - (order.indexOf(b.id) + 1 || 999));
   return (
     <section className="mt-5 rounded-xl border border-line bg-white">
       <button className="flex w-full items-center gap-2 px-4 py-3 text-left" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         <span className="flex-1">
           <span className="block text-[13px] font-semibold">Does this conversation settle anything from before?</span>
           <span className="block text-xs text-ink-3">
-            {picked.size ? `${picked.size} earlier ${picked.size === 1 ? "item" : "items"} will be marked answered when you submit.` : `${items.length} earlier open ${items.length === 1 ? "item" : "items"} for this client. Tick the ones this conversation answers.`}
+            {picked.size ? `${picked.size} earlier ${picked.size === 1 ? "item" : "items"} ${readOnly ? (picked.size === 1 ? "was" : "were") + " marked answered" : "will be marked answered when you submit"}.` : `${items.length} earlier open ${items.length === 1 ? "item" : "items"} for this client. Tick the ones this conversation answers.`}
           </span>
         </span>
         <span className="text-xs text-accent">{open ? "Hide" : "Show"}</span>
       </button>
       {open ? (
         <ul className="divide-y divide-line border-t border-line">
-          {items.map((it) => (
+          {sorted.map((it) => (
             <li key={it.id}>
               <label className={cx("flex items-start gap-3 px-4 py-2.5 text-[13px]", readOnly ? "" : "cursor-pointer hover:bg-page")}>
                 <input
