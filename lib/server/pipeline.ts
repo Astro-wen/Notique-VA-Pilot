@@ -288,7 +288,7 @@ Return one JSON object with this exact shape:
       "confidence": <number from 0 to 1>,
       "change_type": "new" | "changed",
       "changed_from": "<the earlier value only, at most five words, such as $900,000 or two bedrooms; omit when the change is not a value>",
-      "supersedes_id": "<id of the earlier verified fact this replaces, only when one is listed and clearly replaced>",
+      "supersedes_id": "<id of the earlier verified fact this replaces, answers, or settles; only when one is listed>",
       "follow_up_date": "<YYYY-MM-DD only if the conversation names a date by which something should be followed up>",
       "follow_up_condition": "<the condition the client said they are waiting on, in a few words, if any>",
       "suggested_task": { "title": "...", "description": "...", "category": "Research" | "Listing shortlist" | "Comparison table" | "Follow-up draft" | "Meeting brief" | "Document prep" | "Other", "est_minutes": <integer> }
@@ -315,7 +315,7 @@ Rules:
 6. Include suggested_task only for questions and next_steps where a remote assistant could do the work from documents and online research, such as finding listings, building a comparison, preparing a brief, or drafting a follow-up for the agent to send. The assistant never phones or messages the client or third parties. Omit suggested_task otherwise. The agent reads suggested_task and sends it to the assistant with one tap, so write title and description in the agent's own voice as an instruction to the assistant ("Draft a follow-up email to Michael about...", "Find out whether..."), never "the agent" in the third person, and do not repeat a date that will already have passed.
 7. Omit optional fields that do not apply. Do not add commentary outside the JSON.
 11. The agent reads every fact. Refer to the agent by the first name given above, never as "the agent", for example "Sarah will send three comparable sales this week".
-12. When this conversation settles, answers, or replaces an earlier verified fact (an open question that now has an answer, an offer amount or plan that changed, a decision that was reversed), set supersedes_id on the new fact to that earlier fact's id, so the old line is retired and the agent never sees two versions side by side.
+12. When this conversation settles, answers, or replaces an earlier verified fact, set supersedes_id on the new fact to that earlier fact's id, so the old line is retired and the agent never sees two versions side by side. This covers: an offer amount or plan that changed; a decision that was reversed; an open question that now has an answer; a risk that turned out not to be one. An answer is never itself an open question: file it where it belongs (a decision, budget, needs, or a risk that remains) and point supersedes_id at the question it answers. Example: earlier question "Are the solar panels owned or leased?" and earlier risk "The solar panels may be leased"; the client now says they are owned, so write a decision "The solar panels are owned and come with the house" with supersedes_id set to the risk or question it settles (pick the one it most directly replaces). Use each earlier id at most once.
 13. Do not put a suggested_task on a fact when the same work is already in the list of requested or suggested work above.
 8. If the event contains nothing relevant, return an empty facts array.`;
 
