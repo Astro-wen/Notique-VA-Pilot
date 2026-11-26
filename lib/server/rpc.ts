@@ -502,6 +502,9 @@ async function projectList(agentId: string): Promise<ProjectListItem[]> {
       open_tasks: tasks.filter((t) => t.project_id === p.id && ["received", "in_progress", "waiting"].includes(t.status)).length,
       to_review: tasks.filter((t) => t.project_id === p.id && t.status === "delivered" && !t.agent_feedback).length,
       needs_answer: tasks.filter((t) => t.project_id === p.id && t.status === "waiting").length,
+      suggested: tasks.filter((t) => t.project_id === p.id && t.status === "suggested").length,
+      in_progress: tasks.filter((t) => t.project_id === p.id && ["received", "in_progress"].includes(t.status)).length,
+      failed_events: ev.filter((e) => e.status === "failed").length,
       last_activity: last,
     };
   });

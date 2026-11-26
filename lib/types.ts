@@ -342,6 +342,12 @@ export interface ProjectListItem extends Project {
   verify_due?: string | null;
   /** Requests where the VA is waiting on the user. */
   needs_answer?: number;
+  /** Suggested follow-ups the user has not sent or dismissed. */
+  suggested?: number;
+  /** Requests the VA is working on, not waiting on the user. */
+  in_progress?: number;
+  /** Uploads that could not be read. */
+  failed_events?: number;
   pending_events: number;
   last_activity: string | null;
 }

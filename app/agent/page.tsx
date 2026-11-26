@@ -147,14 +147,12 @@ function AgentApp() {
                     <span className="block truncate font-semibold">{p.client_name}</span>
                     <span className="block truncate text-xs text-ink-3">{p.last_activity ? `Last conversation ${ago(p.last_activity).toLowerCase()}` : "No conversations yet"}</span>
                   </span>
-                  {p.to_review ? <Badge tone="ok">{p.to_review} ready for you</Badge> : null}
-                  {p.needs_answer ? <Badge tone="warn">Needs your answer</Badge> : null}
-                  {p.pending_events ? <Badge tone="accent">Being verified{p.verify_due ? `, ready by ${dateTime(p.verify_due, me?.profile.timezone)}` : ""}</Badge> : null}
-                  {p.open_tasks ? (
-                    <Badge>
-                      {p.open_tasks} open {p.open_tasks === 1 ? "request" : "requests"}
-                    </Badge>
-                  ) : null}
+                  {p.needs_answer ? <Badge tone="warn">{p.needs_answer === 1 ? "A question for you" : `${p.needs_answer} questions for you`}</Badge> : null}
+                  {p.to_review ? <Badge tone="ok">{p.to_review} ready to review</Badge> : null}
+                  {p.suggested ? <Badge tone="accent">{p.suggested} {p.suggested === 1 ? "suggestion" : "suggestions"}</Badge> : null}
+                  {p.failed_events ? <Badge tone="bad">Could not read {p.failed_events === 1 ? "an upload" : `${p.failed_events} uploads`}</Badge> : null}
+                  {p.pending_events ? <Badge tone={p.verify_due && new Date(p.verify_due).getTime() < Date.now() ? "warn" : "neutral"}>{p.verify_due && new Date(p.verify_due).getTime() < Date.now() ? "Being verified, running late" : `Being verified${p.verify_due ? `, ready by ${dateTime(p.verify_due, me?.profile.timezone)}` : ""}`}</Badge> : null}
+                  {p.in_progress ? <Badge>{p.in_progress} in progress</Badge> : null}
                 </button>
               ))}
             </div>

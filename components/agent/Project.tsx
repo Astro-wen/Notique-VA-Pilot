@@ -173,25 +173,25 @@ export function AgentProject({ projectId, preview, onBack }: { projectId: string
 
       {tab === "status" ? (
         <div className="mt-4 space-y-4">
-          {data.lastVerified ? (
+          {data.pendingEvents ? (
+            <div className="flex items-start gap-2 rounded-xl bg-accent-soft px-3.5 py-2.5 text-[13px] text-[#2f55cc]">
+              <Clock className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                {data.pendingEvents} new {data.pendingEvents === 1 ? "conversation is" : "conversations are"} being verified{data.va ? ` by ${vaName}` : ""}. {data.pendingDue && new Date(data.pendingDue).getTime() < Date.now() ? `It was due ${dateTime(data.pendingDue, tz, true)} and is running late.` : data.pendingDue ? `Ready by ${dateTime(data.pendingDue, tz, true)}.` : "Expect an update by 9:00 AM the next business day."}
+                {data.lastVerified && data.facts.length ? ` What you see below is from earlier conversations, last verified ${dateTime(data.lastVerified.at, tz)}.` : ""}
+              </span>
+            </div>
+          ) : data.lastVerified ? (
             <div className="flex items-center gap-2 rounded-xl bg-ok-soft px-3.5 py-2.5 text-[13px] text-ok">
               <BadgeCheck className="h-4 w-4 shrink-0" />
               <span>
-                Verified by {data.lastVerified.by.split(" ")[0]}, {dateTime(data.lastVerified.at, tz)}
-              </span>
-            </div>
-          ) : null}
-          {data.pendingEvents ? (
-            <div className="flex items-center gap-2 rounded-xl bg-accent-soft px-3.5 py-2.5 text-[13px] text-[#2f55cc]">
-              <Clock className="h-4 w-4 shrink-0" />
-              <span>
-                {data.pendingEvents} new {data.pendingEvents === 1 ? "conversation is" : "conversations are"} being verified{data.va ? ` by ${vaName}` : ""}. {data.pendingDue ? `Ready by ${dateTime(data.pendingDue, tz, true)}.` : "Expect an update by 9:00 AM the next business day."}
+                Up to date. Everything below was verified by {data.lastVerified.by.split(" ")[0]}, most recently {dateTime(data.lastVerified.at, tz)}.
               </span>
             </div>
           ) : null}
           {!preview && data.failedUploads?.length ? (
             <div className="rounded-xl bg-bad-soft px-3.5 py-2.5 text-[13px] text-bad">
-              We could not read {data.failedUploads.length === 1 ? `"${data.failedUploads[0].title}"` : `${data.failedUploads.length} uploads`}. Your assistant can see it and will retry. If it was the wrong file, add it again.
+              We could not read {data.failedUploads.length === 1 ? `"${data.failedUploads[0].title}"` : `${data.failedUploads.length} uploads`}. Your assistant sees it in their queue and will try again. If it was the wrong file, add the right one.
             </div>
           ) : null}
           {data.watches?.length ? (
