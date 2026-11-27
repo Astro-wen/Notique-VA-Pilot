@@ -910,7 +910,7 @@ export function Verify({ nav, eventId }: { nav: VaNav; eventId: string }) {
                                     <Button size="sm" icon={<X className="h-3.5 w-3.5" />} onClick={() => decide(f, "declined")} title="The AI got this wrong. It is discarded.">
                                       Decline {focused ? <Kbd>D</Kbd> : null}
                                     </Button>
-                                    <Button size="sm" icon={<CircleHelp className="h-3.5 w-3.5" />} onClick={() => decide(f, "insufficient")} title="The transcript does not settle this. It is held for the user to confirm.">
+                                    <Button size="sm" icon={<CircleHelp className="h-3.5 w-3.5" />} onClick={() => decide(f, "insufficient")} title="The transcript does not settle this. The user is asked to confirm it.">
                                       Ask user {focused ? <Kbd>I</Kbd> : null}
                                     </Button>
                                   </div>

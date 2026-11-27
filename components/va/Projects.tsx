@@ -364,7 +364,7 @@ export function ProjectView({ nav, projectId, tab, taskId }: { nav: VaNav; proje
             {data.needsInput.length ? (
               <section className="rounded-xl border border-[#edd9a8] bg-warn-soft px-4 pt-3">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-warn">Waiting for the user to confirm ({data.needsInput.length})</h3>
-                <p className="mt-1 text-[13px] text-ink-2">The transcript did not settle these, so the user cannot see them. Ask the user, then mark each one resolved, or add the confirmed fact from the next conversation.</p>
+                <p className="mt-1 text-[13px] text-ink-2">{data.agent.name.split(" ")[0]} sees these in Notique and can confirm, fix, or reject each one. If you find out the answer first, mark it resolved.</p>
                 <div className="divide-y divide-[#edd9a8]">
                   {data.needsInput.map((f) => (
                     <FactRow
@@ -377,6 +377,16 @@ export function ProjectView({ nav, projectId, tab, taskId }: { nav: VaNav; proje
                         </Button>
                       }
                     />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+            {data.userDeclined?.length ? (
+              <section className="rounded-xl border border-line bg-white px-4 pt-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-bad">{data.agent.name.split(" ")[0]} said these are not true ({data.userDeclined.length})</h3>
+                <div className="divide-y divide-line">
+                  {data.userDeclined.slice(0, 10).map((f) => (
+                    <FactRow key={f.id} fact={f} tz={tz} />
                   ))}
                 </div>
               </section>

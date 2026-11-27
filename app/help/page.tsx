@@ -33,7 +33,8 @@ const STEPS: Record<HelpRole, { title: string; body: string }[]> = {
 
 const FAQ: Record<HelpRole, [string, string][]> = {
   va: [
-    ["What is the difference between Decline and Ask user?", "Decline means the AI got it wrong, so the item is thrown away. Ask user means it might be true but the transcript does not prove it. Those are held under Waiting for the user to confirm on the project, and the user never sees them as facts."],
+    ["What is the difference between Decline and Ask user?", "Decline means the AI got it wrong, so the item is thrown away. Ask user means it might be true but the transcript does not prove it. The user sees those under Can you confirm? and answers Yes, Fix it or Not true. Until then they stay under Waiting for the user to confirm on the project and are not in the deal status. If you find out the answer first, mark it resolved."],
+    ["What happens to an item I never decide on?", "Nothing is deleted, but you cannot submit while any item is still To decide, so the user sees none of that conversation until you finish and submit."],
     ["Why is there no Approve button on some items?", "Two reasons. The AI was not sure about the item, or the wording describes a person instead of the property (family, age, religion, disability, military service). Use Edit and approve: read the quote, rewrite it as a property requirement such as \"needs four bedrooms\", and save. Decline it if it has no property meaning."],
     ["The recording has no consent notice. What now?", "Do not submit. Choose Escalate and pick No recording consent heard. Nothing from the conversation reaches the user."],
     ["The user answered me by text instead of in the app.", "Open the ticket, switch the message box to Log what they said, pick the channel, and paste what they said. The ticket leaves Waiting on user on its own."],
@@ -46,6 +47,7 @@ const FAQ: Record<HelpRole, [string, string][]> = {
     ["What can I add?", "A meeting or call recording, a transcript file, screenshots of a text thread, or a note you type after a meeting. You can also store reference files such as a showing schedule. Those are kept for your assistant and not turned into facts."],
     ["When will I see results?", "By 9:00 AM the next business day in your time zone. Deal status shows a notice while a conversation is being verified."],
     ["What does Verified mean?", "Your assistant checked that line against the recording or text. Tap the source under it to read the exact quote."],
+    ["What is Can you confirm?", "Things your assistant could not tell for sure from the conversation. Tap Yes, correct, Fix it to change the wording, or Not true. Your answer goes into Deal status, and your assistant sees it."],
     ["Does my assistant contact my clients?", "Never. They only prepare research and drafts for you. Review every delivery before you send anything."],
     ["How do I change a request after sending it?", "You can edit it until work starts. After that, open the request and send a message."],
     ["What does Ask for changes do?", "It sends the delivery back to your assistant with your note."],

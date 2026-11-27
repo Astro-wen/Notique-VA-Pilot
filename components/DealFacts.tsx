@@ -5,7 +5,7 @@ import { clock, dateOnly, plainDate, followUpText } from "@/lib/client/format";
 import { SECTIONS, type Fact } from "@/lib/types";
 import { Badge, Button, cx } from "./ui";
 
-export function FactRow({ fact, tz, action }: { fact: Fact; tz?: string; action?: React.ReactNode }) {
+export function FactRow({ fact, tz, action, asUser }: { fact: Fact; tz?: string; action?: React.ReactNode; asUser?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="py-3">
@@ -43,7 +43,7 @@ export function FactRow({ fact, tz, action }: { fact: Fact; tz?: string; action?
         {fact.verdict !== "insufficient" ? (
           <span className="inline-flex items-center gap-1 text-xs text-ok">
             <BadgeCheck className="h-3.5 w-3.5" />
-            Verified{fact.verified_by_name ? ` by ${fact.verified_by_name.split(" ")[0]}` : ""}
+            {fact.confirmed_by_user ? (asUser ? "Confirmed by you" : `Confirmed by ${fact.verified_by_name?.split(" ")[0] ?? "the user"}`) : `Verified${fact.verified_by_name ? ` by ${fact.verified_by_name.split(" ")[0]}` : ""}`}
           </span>
         ) : null}
       </div>
@@ -63,7 +63,7 @@ export function FactRow({ fact, tz, action }: { fact: Fact; tz?: string; action?
 }
 
 /** Verified facts grouped by section. Shared by the VA profile, the user view, and the share page. */
-export function DealFacts({ facts, tz, onResolve }: { facts: Fact[]; tz?: string; onResolve?: (fact: Fact) => void }) {
+export function DealFacts({ facts, tz, onResolve, asUser }: { facts: Fact[]; tz?: string; onResolve?: (fact: Fact) => void; asUser?: boolean }) {
   return (
     <div className="space-y-4">
       {SECTIONS.map((s) => {
@@ -78,6 +78,7 @@ export function DealFacts({ facts, tz, onResolve }: { facts: Fact[]; tz?: string
                   key={f.id}
                   fact={f}
                   tz={tz}
+                  asUser={asUser}
                   action={
                     onResolve && (s.key === "questions" || s.key === "next_steps" || s.key === "risks") ? (
                       <Button size="sm" variant="ghost" onClick={() => onResolve(f)}>

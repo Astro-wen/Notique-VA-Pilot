@@ -140,6 +140,8 @@ export interface Fact {
   event_title?: string;
   event_occurred_at?: string;
   verified_by_name?: string | null;
+  /** The user answered this item themselves. */
+  confirmed_by_user?: boolean;
 }
 
 export type TaskStatus =
@@ -322,7 +324,10 @@ export interface ProjectDetail {
   /** Verified facts that are done or were replaced later. Used by the timeline only. */
   historyFacts?: Fact[];
   /** Insufficient facts. Empty in user views. */
+  /** Items the VA could not settle from the conversation, for the user to confirm. */
   needsInput: Fact[];
+  /** VA view only: items the user said are not right. */
+  userDeclined?: Fact[];
   tasks: Task[];
   files: FileRow[];
   shareLink: ShareLink | null;
@@ -355,6 +360,7 @@ export interface ProjectListItem extends Project {
   with_assistant?: { id: string; title: string; eta: string | null; status: string; sent_at: string | null }[];
   /** Uploads that could not be read. */
   failed_events?: number;
+  to_confirm?: number;
   pending_events: number;
   last_activity: string | null;
 }

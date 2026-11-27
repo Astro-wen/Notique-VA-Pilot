@@ -516,8 +516,12 @@ async function projectList(agentId: string): Promise<ProjectListItem[]> {
   const projects = q(await db().from("projects").select("*").eq("agent_id", agentId).is("archived_at", null).order("created_at", { ascending: false })) as Project[];
   if (projects.length === 0) return [];
   const ids = projects.map((p) => p.id);
-  const events = q(await db().from("events").select("project_id,status,occurred_at,due_at").in("project_id", ids)) as any[];
+  const events = q(await db().from("events").select("id,project_id,status,occurred_at,due_at").in("project_id", ids)) as any[];
   const tasks = q(await db().from("tasks").select("id,project_id,status,agent_feedback,title,eta,assigned_at").in("project_id", ids)) as any[];
+  const submittedIds = events.filter((e) => e.status === "submitted").map((e) => e.id);
+  const toConfirm = submittedIds.length
+    ? (q(await db().from("facts").select("project_id").in("event_id", submittedIds).eq("verdict", "insufficient").is("resolved_at", null)) as { project_id: string }[])
+    : [];
   return projects.map((p) => {
     const ev = events.filter((e) => e.project_id === p.id);
     const last = ev.map((e) => e.occurred_at).sort().pop() ?? null;
@@ -535,6 +539,7 @@ async function projectList(agentId: string): Promise<ProjectListItem[]> {
         .filter((t) => t.project_id === p.id && ["received", "in_progress"].includes(t.status))
         .map((t) => ({ id: t.id, title: t.title, eta: t.eta ?? null, status: t.status, sent_at: t.assigned_at ?? null })),
       failed_events: ev.filter((e) => e.status === "failed").length,
+      to_confirm: toConfirm.filter((f) => f.project_id === p.id).length,
       last_activity: last,
     };
   });
@@ -789,7 +794,11 @@ export async function sendMorningBriefs(): Promise<{ sent: number; skipped: numb
         : [];
       const lines: string[] = [];
       const item = (t: { title: string; project_id: string }) => `${t.title}${pname(t.project_id) ? ` (${pname(t.project_id)})` : ""}`;
+      const unsure = submitted.length
+        ? (q(await db().from("facts").select("statement,project_id").in("event_id", submitted.map((e) => e.id).slice(0, 300)).eq("verdict", "insufficient").is("resolved_at", null).limit(3)) as any[])
+        : [];
       for (const f of followUps) lines.push(`Follow up today: ${f.statement}${pname(f.project_id) ? ` (${pname(f.project_id)})` : ""}`);
+      for (const f of unsure.slice(0, 2)) lines.push(`Can you confirm: ${f.statement}${pname(f.project_id) ? ` (${pname(f.project_id)})` : ""}`);
       for (const t of ready.slice(0, 3)) lines.push(`Ready for you: ${item(t)}`);
       for (const t of waiting.slice(0, 3)) lines.push(`Your assistant needs an answer: ${item(t)}`);
       for (const t of dueToday.slice(0, 2)) lines.push(`Coming today: ${item(t)}`);
@@ -937,6 +946,7 @@ async function buildProject(project: Project, forAgent: boolean): Promise<Projec
   let facts: Fact[] = [];
   let needsInput: Fact[] = [];
   let historyFacts: Fact[] = [];
+  let userDeclined: Fact[] = [];
   if (submittedIds.length) {
     const rows = q(
       await db()
@@ -944,7 +954,7 @@ async function buildProject(project: Project, forAgent: boolean): Promise<Projec
         .select("*")
         .eq("project_id", project.id)
         .in("event_id", submittedIds)
-        .in("verdict", forAgent ? ["approved", "edited"] : ["approved", "edited", "insufficient"])
+        .in("verdict", ["approved", "edited", "insufficient", "declined"])
         .order("created_at", { ascending: false }),
     ) as any[];
     const names = await nameMap(rows.map((r) => r.verified_by));
@@ -959,13 +969,17 @@ async function buildProject(project: Project, forAgent: boolean): Promise<Projec
         event_title: ev?.title,
         event_occurred_at: ev?.occurred_at,
         verified_by_name: r.verified_by ? names[r.verified_by] ?? null : null,
+        confirmed_by_user: !!r.verified_by && r.verified_by === project.agent_id,
       };
       return fact;
     });
     facts = decorated.filter((f) => !f.resolved_at && (f.verdict === "approved" || f.verdict === "edited"));
     // Kept for the timeline, so a conversation still shows what came out of it after an item is done or replaced.
     historyFacts = decorated.filter((f) => f.resolved_at && (f.verdict === "approved" || f.verdict === "edited"));
-    needsInput = forAgent ? [] : decorated.filter((f) => !f.resolved_at && f.verdict === "insufficient");
+    // Items the VA could not settle from the conversation. The user confirms, corrects or rejects them.
+    needsInput = decorated.filter((f) => !f.resolved_at && f.verdict === "insufficient");
+    // So the VA knows which of those the user said were wrong.
+    userDeclined = forAgent ? [] : decorated.filter((f) => f.verdict === "declined" && f.confirmed_by_user);
   }
 
   const hidden = forAgent ? ["dismissed", "cancelled"] : ["dismissed"];
@@ -999,6 +1013,7 @@ async function buildProject(project: Project, forAgent: boolean): Promise<Projec
     facts,
     historyFacts,
     needsInput,
+    userDeclined,
     tasks,
     files,
     shareLink: forAgent ? null : links[0] ?? null,
@@ -1890,9 +1905,106 @@ export const handlers: Record<string, Handler> = {
     await loadProject(p, fact.project_id);
     // Only verified open items can be closed, and only from the sections that offer it.
     const ev = q(await db().from("events").select("status").eq("id", fact.event_id).maybeSingle()) as { status: string } | null;
-    if (ev?.status !== "submitted" || !["approved", "edited"].includes(fact.verdict) || !["questions", "next_steps", "risks"].includes(fact.section)) throw new RpcError("This item cannot be marked resolved.");
+    // The VA may also close an item left for the user once they learn the answer another way.
+    const leftForUser = fact.verdict === "insufficient" && p.role !== "agent";
+    const closable = ["approved", "edited"].includes(fact.verdict) && ["questions", "next_steps", "risks"].includes(fact.section);
+    if (ev?.status !== "submitted" || !(leftForUser || closable)) throw new RpcError("This item cannot be marked resolved.");
     q(await db().from("facts").update({ resolved_at: args.undo ? null : new Date().toISOString() }).eq("id", fact.id).select("id"));
     return { ok: true };
+  },
+
+  /** The user confirms, corrects or rejects an item the VA could not settle from the conversation. */
+  async answerFact(ctx, args) {
+    const p = me(ctx);
+    if (p.role !== "agent") throw new RpcError("Only the user can answer this. To change it yourself, reopen the conversation.", 403);
+    const fact = q(await db().from("facts").select("*").eq("id", uid(args.fact_id, "Item")).maybeSingle()) as any;
+    if (!fact) throw new RpcError("This item no longer exists.", 404);
+    await loadProject(p, fact.project_id);
+    const event = q(await db().from("events").select("id,status").eq("id", fact.event_id).maybeSingle()) as { id: string; status: string } | null;
+    if (event?.status !== "submitted") throw new RpcError("Your assistant is checking this conversation again. Try again once it is verified.", 409);
+    const answer = str(args.answer, "Answer", 10);
+    const now = new Date().toISOString();
+    const gone = "This item was already answered. The screen now shows the latest.";
+
+    if (answer === "undo") {
+      const late = !fact.verified_at || Date.now() - new Date(fact.verified_at).getTime() > 15 * 60 * 1000;
+      if (!["approved", "edited", "declined"].includes(fact.verdict) || fact.verified_by !== p.id || late) throw new RpcError("This answer can no longer be undone.", 409);
+      const log = ((await db().from("audit_log").select("detail").eq("action", "fact.answer").eq("object_id", fact.id).order("at", { ascending: false }).limit(1)).data ?? []) as { detail: any }[];
+      const d = log[0]?.detail;
+      if (!d) throw new RpcError("This answer can no longer be undone.", 409);
+      const back = q(
+        await db()
+          .from("facts")
+          .update({ verdict: "insufficient", statement: d.before_statement ?? fact.statement, verified_by: d.before_verified_by ?? null, verified_at: d.before_verified_at ?? null })
+          .eq("id", fact.id)
+          .eq("verdict", fact.verdict)
+          .select("id"),
+      ) as any[];
+      if (back.length === 0) throw new RpcError(gone, 409);
+      if (Array.isArray(d.created) && d.created.length) await db().from("tasks").delete().in("id", d.created).eq("status", "suggested");
+      if (Array.isArray(d.dismissed) && d.dismissed.length) await db().from("tasks").update({ status: "suggested" }).in("id", d.dismissed).eq("status", "dismissed");
+      if (Array.isArray(d.resolved) && d.resolved.length) await db().from("facts").update({ resolved_at: null }).in("id", d.resolved);
+      await audit(p, "fact.answer_undo", "fact", fact.id);
+      return { ok: true };
+    }
+
+    if (!["yes", "fix", "no"].includes(answer)) throw new RpcError("Unknown answer.");
+    if (fact.verdict !== "insufficient" || fact.resolved_at) throw new RpcError(gone, 409);
+    const statement = answer === "fix" ? str(args.statement, "Wording", 400) : (fact.statement as string);
+    if (answer !== "no" && flaggedWord(statement)) throw new RpcError(fairHousingMessage(statement));
+    const verdict = answer === "no" ? "declined" : statement !== fact.statement ? "edited" : "approved";
+    const rows = q(
+      await db().from("facts").update({ verdict, statement, verified_by: p.id, verified_at: now }).eq("id", fact.id).eq("verdict", "insufficient").is("resolved_at", null).select("id"),
+    ) as any[];
+    if (rows.length === 0) throw new RpcError(gone, 409);
+
+    // A confirmed item counts like one the VA approved: it replaces the earlier item it updates, and its follow-up is suggested.
+    const resolved: string[] = [];
+    const dismissed: string[] = [];
+    const created: string[] = [];
+    if (verdict !== "declined") {
+      if (fact.supersedes_id) {
+        const r = q(await db().from("facts").update({ resolved_at: now }).eq("id", fact.supersedes_id).is("resolved_at", null).select("id")) as { id: string }[];
+        resolved.push(...r.map((x) => x.id));
+        if (r.length) {
+          const t = q(await db().from("tasks").update({ status: "dismissed" }).eq("origin_fact_id", fact.supersedes_id).eq("status", "suggested").select("id")) as { id: string }[];
+          dismissed.push(...t.map((x) => x.id));
+        }
+      }
+      if (fact.suggested_task && (fact.section === "questions" || fact.section === "next_steps")) {
+        const have = q(await db().from("tasks").select("id").eq("origin_fact_id", fact.id).limit(1)) as any[];
+        if (have.length === 0) {
+          const ins = await db()
+            .from("tasks")
+            .insert({
+              project_id: fact.project_id,
+              agent_id: p.id,
+              title: fact.suggested_task.title,
+              description: fact.suggested_task.description || statement,
+              category: fact.suggested_task.category || "Research",
+              est_minutes: fact.suggested_task.est_minutes ?? null,
+              status: "suggested",
+              origin_fact_id: fact.id,
+              origin_event_id: fact.event_id,
+              created_by: p.id,
+            })
+            .select("id")
+            .single();
+          if (ins.data) created.push((ins.data as { id: string }).id);
+        }
+      }
+    }
+    await audit(p, "fact.answer", "fact", fact.id, {
+      answer,
+      verdict,
+      before_statement: fact.statement,
+      before_verified_by: fact.verified_by ?? null,
+      before_verified_at: fact.verified_at ?? null,
+      resolved,
+      dismissed,
+      created,
+    });
+    return { ok: true, verdict, suggested_tasks: created.length };
   },
 
   /* ---------- tasks ---------- */

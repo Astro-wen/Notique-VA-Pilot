@@ -135,13 +135,13 @@ function AgentApp() {
             </div>
             {error && !data ? <ErrorNote className="mt-4" message={error} onRetry={() => reload()} /> : null}
             {loading && !data ? <Spinner /> : null}
-            {data && data.some((p) => p.needs_answer || p.to_review || p.suggested) ? (
+            {data && data.some((p) => p.to_confirm || p.needs_answer || p.to_review || p.suggested) ? (
               // One place that answers "what is waiting on me", across every client.
               <Card className="mt-5 p-3.5" data-tour="home-waiting">
                 <div className="text-xs font-semibold uppercase tracking-wide text-ink-3">Waiting on you</div>
                 <ul className="mt-1.5 divide-y divide-line">
                   {data
-                    .filter((p) => p.needs_answer || p.to_review || p.suggested)
+                    .filter((p) => p.to_confirm || p.needs_answer || p.to_review || p.suggested)
                     .map((p) => (
                       <li key={p.id}>
                         <button className="flex w-full items-center gap-3 py-2.5 text-left" onClick={() => router.push(`/agent?project=${p.id}`)}>
@@ -149,6 +149,7 @@ function AgentApp() {
                             <span className="block truncate text-sm font-medium">{p.client_name}</span>
                             <span className="block text-[13px] text-ink-2">
                               {[
+                                p.to_confirm ? `${p.to_confirm === 1 ? "1 item" : `${p.to_confirm} items`} to confirm` : "",
                                 p.needs_answer ? `${p.needs_answer === 1 ? "a question" : `${p.needs_answer} questions`} from ${me?.assistant?.split(" ")[0] ?? "your assistant"}` : "",
                                 p.to_review ? `${p.to_review} ${p.to_review === 1 ? "delivery" : "deliveries"} to review` : "",
                                 p.suggested ? `${p.suggested} suggested follow-up${p.suggested === 1 ? "" : "s"} to send or skip` : "",
@@ -208,6 +209,7 @@ function AgentApp() {
                     <span className="block truncate font-semibold">{p.client_name}</span>
                     <span className="block truncate text-xs text-ink-3">{p.last_activity ? `Last conversation ${ago(p.last_activity).toLowerCase()}` : "No conversations yet"}</span>
                   </span>
+                  {p.to_confirm ? <Badge tone="warn">{p.to_confirm} to confirm</Badge> : null}
                   {p.needs_answer ? <Badge tone="warn">{p.needs_answer === 1 ? "A question for you" : `${p.needs_answer} questions for you`}</Badge> : null}
                   {p.to_review ? <Badge tone="ok">{p.to_review} ready to review</Badge> : null}
                   {p.suggested ? <Badge tone="accent">{p.suggested} {p.suggested === 1 ? "suggestion" : "suggestions"}</Badge> : null}

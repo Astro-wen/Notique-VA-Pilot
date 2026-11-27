@@ -6,6 +6,7 @@ import { SOURCE_LABEL, dateOnly, dateTime, isPast, projectLine } from "@/lib/cli
 import { SECTIONS, type EventRow, type Fact, type ProjectDetail, type Task } from "@/lib/types";
 import { AddEventDialog } from "../AddEventDialog";
 import { DealFacts, FactRow } from "../DealFacts";
+import { ConfirmItems } from "./ConfirmItems";
 import { AddFile, FileItem } from "../FileList";
 import { Badge, Button, Card, Empty, ErrorNote, Spinner, Tabs, cx, useLoad, useToast } from "../ui";
 import { AGENT_STATUS, TaskCard, TaskFormDialog } from "./TaskCard";
@@ -107,8 +108,10 @@ export function AgentProject({ projectId, preview, onBack, openRequest }: { proj
   const waiting = active.filter((t) => t.status === "waiting");
   const toReview = delivered.filter((t) => !t.agent_feedback);
   const attention: { text: string; action: string; go: () => void; primary?: boolean }[] = [];
-  if (waiting.length) attention.push({ text: `${vaName} has ${waiting.length === 1 ? "a question" : `${waiting.length} questions`} for you`, action: "Answer", go: firstOf(waiting), primary: true });
-  if (toReview.length) attention.push({ text: `${toReview.length} finished ${toReview.length === 1 ? "request is" : "requests are"} ready to review`, action: "Review", go: firstOf(toReview), primary: !waiting.length });
+  const toConfirm = data.needsInput ?? [];
+  if (toConfirm.length) attention.push({ text: `${toConfirm.length === 1 ? "1 item" : `${toConfirm.length} items`} for you to confirm`, action: "Confirm", go: () => document.getElementById("to-confirm")?.scrollIntoView({ behavior: "smooth", block: "start" }), primary: true });
+  if (waiting.length) attention.push({ text: `${vaName} has ${waiting.length === 1 ? "a question" : `${waiting.length} questions`} for you`, action: "Answer", go: firstOf(waiting), primary: !toConfirm.length });
+  if (toReview.length) attention.push({ text: `${toReview.length} finished ${toReview.length === 1 ? "request is" : "requests are"} ready to review`, action: "Review", go: firstOf(toReview), primary: !waiting.length && !toConfirm.length });
   if (suggested.length) attention.push({ text: `${suggested.length} suggested ${suggested.length === 1 ? "follow-up" : "follow-ups"} from your conversations`, action: "See suggestions", go: () => setTab("tasks") });
 
   const byDay = new Map<string, EventRow[]>();
@@ -198,6 +201,7 @@ export function AgentProject({ projectId, preview, onBack, openRequest }: { proj
               We could not read {data.failedUploads.length === 1 ? `"${data.failedUploads[0].title}"` : `${data.failedUploads.length} uploads`}. Your assistant sees it in their queue and will try again. If it was the wrong file, add the right one.
             </div>
           ) : null}
+          <ConfirmItems items={toConfirm} tz={tz} vaName={vaName} preview={preview} onChanged={() => reload(true)} />
           {data.watches?.length ? (
             <div className="rounded-xl border border-line bg-white p-3.5">
               <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-3">
@@ -217,6 +221,7 @@ export function AgentProject({ projectId, preview, onBack, openRequest }: { proj
             </div>
           ) : null}
           {data.facts.length === 0 ? (
+            toConfirm.length && !data.pendingEvents ? null : (
             <Card>
               <Empty
                 icon={<FileText className="h-5 w-5" />}
@@ -225,6 +230,7 @@ export function AgentProject({ projectId, preview, onBack, openRequest }: { proj
                 action={!preview && !data.pendingEvents ? <Button onClick={() => setAdd(true)}>Add conversation</Button> : null}
               />
             </Card>
+            )
           ) : (
             <>
               {(() => {
@@ -249,7 +255,7 @@ export function AgentProject({ projectId, preview, onBack, openRequest }: { proj
                   </Card>
                 );
               })()}
-              <DealFacts facts={data.facts} tz={tz} onResolve={preview ? undefined : resolve} />
+              <DealFacts facts={data.facts} tz={tz} onResolve={preview ? undefined : resolve} asUser />
             </>
           )}
         </div>
