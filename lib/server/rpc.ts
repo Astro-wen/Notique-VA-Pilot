@@ -1951,7 +1951,14 @@ export const handlers: Record<string, Handler> = {
     if (!["yes", "fix", "no"].includes(answer)) throw new RpcError("Unknown answer.");
     if (fact.verdict !== "insufficient" || fact.resolved_at) throw new RpcError(gone, 409);
     const statement = answer === "fix" ? str(args.statement, "Wording", 400) : (fact.statement as string);
-    if (answer !== "no" && flaggedWord(statement)) throw new RpcError(fairHousingMessage(statement));
+    const word = answer !== "no" ? flaggedWord(statement) : null;
+    if (word) {
+      throw new RpcError(
+        answer === "fix"
+          ? `"${word}" describes a person, not the property, so fair housing rules keep it out of your deal status. Write it as a property need, for example "needs four bedrooms".`
+          : `"${word}" describes a person, not the property, so fair housing rules keep it out of your deal status. Choose Fix it to write it as a property need, or Not true.`,
+      );
+    }
     const verdict = answer === "no" ? "declined" : statement !== fact.statement ? "edited" : "approved";
     const rows = q(
       await db().from("facts").update({ verdict, statement, verified_by: p.id, verified_at: now }).eq("id", fact.id).eq("verdict", "insufficient").is("resolved_at", null).select("id"),
